@@ -16,6 +16,7 @@ from gestor.cola import GestorCola
 from gestor.config import Preferencias
 from gestor.db import BaseDatos
 from gestor.ipc import Manejador, ServidorIPC
+from gestor.vinculacion import Vinculacion
 from gestor.modelos import CodigoError, ErrorGestor, EstadoTarea, InfoContenido
 from gestor.nativo import host
 from gestor.protocolo import validar_mensaje
@@ -23,8 +24,11 @@ from gestor.protocolo import validar_mensaje
 RAIZ = Path(__file__).resolve().parents[1]
 
 
-def M(accion, datos=None, id_="m1", **extra):
-    return {"v": 1, "id": id_, "accion": accion, "datos": datos or {}, **extra}
+def M(accion, datos=None, id_="m1", token=None, **extra):
+    m = {"v": 1, "id": id_, "accion": accion, "datos": datos or {}, **extra}
+    if token:
+        m["token"] = token
+    return m
 
 
 # --- protocolo --------------------------------------------------------------
@@ -72,31 +76,40 @@ def cola(tmp_path):
     db.cerrar()
 
 
-def test_manejador_ciclo_basico(cola):
-    mz = Manejador(cola)
-    assert mz.manejar(M("ping"))["ok"]
-    t = mz.manejar(M("detectar", {"url": "https://a.com/v", "origen": "https://a.com/"}))["datos"]
+@pytest.fixture
+def vinc(cola):
+    v = Vinculacion(cola.db)
+    return v, v.emparejar(v.codigo_actual()[0], "Pruebas")      # (vinculación, token válido)
+
+
+def test_manejador_ciclo_basico(cola, vinc):
+    v, tk = vinc
+    mz = Manejador(cola, v, abrir_carpeta=lambda r: None)
+    assert mz.manejar(M("ping"))["datos"]["vinculado"] is False
+    assert mz.manejar(M("ping", token=tk))["datos"]["vinculado"] is True
+    t = mz.manejar(M("detectar", {"url": "https://a.com/v", "origen": "https://a.com/"}, token=tk))["datos"]
     assert t["estado"] == "detectado"
-    lista = mz.manejar(M("listar", {"estados": ["detectado"]}))["datos"]["tareas"]
+    lista = mz.manejar(M("listar", {"estados": ["detectado"]}, token=tk))["datos"]["tareas"]
     assert [x["id"] for x in lista] == [t["id"]]
-    assert mz.manejar(M("cancelar", {"id": t["id"]}))["datos"]["estado"] == "cancelado"
-    assert mz.manejar(M("eliminar", {"id": t["id"]}))["ok"]
-    r = mz.manejar(M("estado", {"id": t["id"]}))
+    assert mz.manejar(M("cancelar", {"id": t["id"]}, token=tk))["datos"]["estado"] == "cancelado"
+    assert mz.manejar(M("eliminar", {"id": t["id"]}, token=tk))["ok"]
+    r = mz.manejar(M("estado", {"id": t["id"]}, token=tk))
     assert not r["ok"] and r["error"]["mensaje"] == "La tarea no existe."
 
 
-def test_manejador_analizar(cola):
-    r = Manejador(cola).manejar(M("analizar", {"url": "https://a.com/v"}))
+def test_manejador_analizar(cola, vinc):
+    r = Manejador(cola, vinc[0]).manejar(M("analizar", {"url": "https://a.com/v"}, token=vinc[1]))
     assert r["ok"] and r["datos"]["titulo"] == "Título" and r["datos"]["diagnostico"]["nivel"] == "desconocido"
 
 
-def test_manejador_errores_y_basura(cola):
-    mz = Manejador(cola)
+def test_manejador_errores_y_basura(cola, vinc):
+    mz = Manejador(cola, vinc[0])
+    tk = vinc[1]
     assert mz.manejar("basura")["ok"] is False
-    r = mz.manejar(M("encolar", {"url": "http://localhost/x"}))
+    r = mz.manejar(M("encolar", {"url": "http://localhost/x"}, token=tk))
     assert not r["ok"] and r["error"]["codigo"] == "url_invalida"
     cola._extraer = lambda url, **kw: (_ for _ in ()).throw(RuntimeError("boom"))
-    r = mz.manejar(M("analizar", {"url": "https://a.com/v"}))
+    r = mz.manejar(M("analizar", {"url": "https://a.com/v"}, token=tk))
     assert not r["ok"] and r["error"]["codigo"] == "desconocido"     # fallo inesperado: sin detalles internos
     assert "boom" not in json.dumps(r)
 
@@ -106,14 +119,16 @@ def test_manejador_errores_y_basura(cola):
 def servidor(cola):
     direccion = rf"\\.\pipe\GestorTest-{uuid.uuid4().hex}"
     clave = os.urandom(32)
-    s = ServidorIPC(cola, direccion=direccion, clave=clave)
+    v = Vinculacion(cola.db)
+    token = v.emparejar(v.codigo_actual()[0], "Host de prueba")
+    s = ServidorIPC(cola, vinculacion=v, direccion=direccion, clave=clave)
     s.iniciar()
-    yield direccion, clave
+    yield direccion, clave, token
     s.detener()
 
 
 def test_pipe_ida_y_vuelta(servidor):
-    direccion, clave = servidor
+    direccion, clave, _ = servidor
     with Client(direccion, family="AF_PIPE", authkey=clave) as c:
         c.send_bytes(json.dumps(M("ping")).encode())
         assert json.loads(c.recv_bytes())["ok"]
@@ -124,7 +139,7 @@ def test_pipe_ida_y_vuelta(servidor):
 
 
 def test_pipe_rechaza_clave_incorrecta(servidor):
-    direccion, _ = servidor
+    direccion = servidor[0]
     from multiprocessing import AuthenticationError
     with pytest.raises((AuthenticationError, OSError, EOFError)):
         Client(direccion, family="AF_PIPE", authkey=b"x" * 32)
@@ -182,10 +197,10 @@ def _hablar(datos_dir, direccion, mensajes, espera="1"):
 
 
 def test_host_real_de_extremo_a_extremo(servidor, tmp_path):
-    direccion, clave = servidor
+    direccion, clave, token = servidor
     (tmp_path / "ipc.key").write_bytes(clave)
-    p, r = _hablar(tmp_path, direccion, [M("ping", id_="a"), M("detectar", {"url": "https://a.com/v"}, id_="b"),
-                                        M("encolar", {"url": "file:///x"}, id_="c")])
+    p, r = _hablar(tmp_path, direccion, [M("ping", id_="a"), M("detectar", {"url": "https://a.com/v"}, id_="b", token=token),
+                                        M("encolar", {"url": "file:///x"}, id_="c", token=token)])
     assert p.returncode == 0, p.stderr
     assert [x["id"] for x in r] == ["a", "b", "c"]
     assert r[0]["ok"] and r[1]["datos"]["estado"] == "detectado"

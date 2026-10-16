@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import drm, reglas
-from .config import Preferencias
+from .config import Preferencias, localizar_deno
 from .db import BaseDatos
 from .descargador import Progreso, descargar, limpiar_carpeta_trabajo
 from .errores import traducir_excepcion
@@ -25,11 +25,12 @@ _INTERVALO_PROGRESO = 0.5   # segundos mínimos entre escrituras de progreso a l
 
 
 class GestorCola:
-    def __init__(self, db: BaseDatos, *, ffmpeg_dir: Path | None = None,
+    def __init__(self, db: BaseDatos, *, ffmpeg_dir: Path | None = None, deno: Path | None = None,
                  extraer: Callable[..., InfoContenido] = obtener_info,
                  descargar_fn: Callable = descargar, permitir_interno: bool = False):
         self.db = db
         self.ffmpeg_dir = ffmpeg_dir
+        self.deno = deno if deno is not None else localizar_deno()
         self._extraer = extraer
         self._descargar = descargar_fn
         self._permitir_interno = permitir_interno      # solo pruebas con servidores locales
@@ -86,7 +87,40 @@ class GestorCola:
         url = validar_url(url, permitir_interno=self._permitir_interno)
         t = self.db.crear_tarea(url, origen=origen, estado=EstadoTarea.DETECTADO)
         self._publicar(t)
+        # Los datos (título, miniatura, compatibilidad) se obtienen en segundo plano; la tarea espera en
+        # «Detectado» hasta que el usuario pulse «Descargar» (o la elimine).
+        threading.Thread(target=self._leer_datos_seguro, args=(t.id,), daemon=True).start()
         return t
+
+    def _leer_datos_seguro(self, id_: str) -> None:
+        try:
+            self._leer_datos(id_)
+        except Exception:        # p. ej. la base de datos se cerró mientras se leían los datos
+            pass
+
+    def _leer_datos(self, id_: str) -> None:
+        t = self.db.obtener_tarea(id_)
+        if t is None:
+            return
+        try:
+            if not self._permitir_interno:
+                verificar_resolucion(t.url)
+            info = self._extraer(t.url, permitir_interno=self._permitir_interno)
+            d = drm.evaluar(t.url, info)
+        except Exception as exc:
+            e = drm.enriquecer_error(t.url, exc if isinstance(exc, ErrorGestor) else traducir_excepcion(exc))
+            t = self.db.obtener_tarea(id_)
+            if t is not None and t.estado == EstadoTarea.DETECTADO:
+                t.error = {"codigo": e.codigo.value, "mensaje": e.mensaje, "causa": e.causa,
+                           "solucion": e.solucion, "detalle": e.detalle_tecnico}
+                self._publicar(t)
+            return
+        t = self.db.obtener_tarea(id_)
+        if t is None or t.estado != EstadoTarea.DETECTADO:
+            return                                   # mientras tanto se inició o se eliminó
+        t.titulo, t.sitio, t.miniatura, t.duracion = info.titulo, info.sitio, info.miniatura_url, info.duracion_seg
+        t.notas = [d.motivo] if d.nivel != drm.Compatibilidad.COMPATIBLE else []
+        self._publicar(t)
 
     def encolar(self, url: str, *, origen: str | None = None, opciones: dict | None = None,
                 destino_manual: str | None = None) -> Tarea:
@@ -137,6 +171,12 @@ class GestorCola:
         self._limpiar_trabajo(t)
         self.db.eliminar_tarea(id_)
         self._notificar({"id": id_, "estado": "eliminado"})
+
+    def limpiar_terminadas(self) -> int:
+        """Quita del historial las tareas completadas, canceladas o con error (no borra archivos)."""
+        n = self.db.limpiar_historial()
+        self._notificar({"id": "*", "estado": "eliminado"})
+        return n
 
     def obtener(self, id_: str) -> Tarea | None:
         return self.db.obtener_tarea(id_)
@@ -228,7 +268,7 @@ class GestorCola:
             if not self._permitir_interno:
                 verificar_resolucion(t.url)
             info = self._extraer(t.url, permitir_interno=self._permitir_interno)
-            t.titulo, t.sitio = info.titulo, info.sitio
+            t.titulo, t.sitio, t.miniatura, t.duracion = info.titulo, info.sitio, info.miniatura_url, info.duracion_seg
 
             res = reglas.resolver(t.url, info.sitio, self.db.listar_reglas(solo_activas=True), prefs, t.opciones)
             t.notas = [*(f"Regla aplicada: {n}" for n in res.reglas_aplicadas)]
@@ -262,7 +302,7 @@ class GestorCola:
 
             t.estado = EstadoTarea.DESCARGANDO
             self._publicar(t)
-            resultado = self._descargar(t.url, res.a_opciones(prefs, self.ffmpeg_dir), trabajo,
+            resultado = self._descargar(t.url, res.a_opciones(prefs, self.ffmpeg_dir, self.deno), trabajo,
                                         progreso=alprogreso, cancelar=ev,
                                         permitir_interno=self._permitir_interno)
 

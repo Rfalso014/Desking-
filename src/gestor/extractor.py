@@ -13,6 +13,7 @@ from yt_dlp.utils import DownloadError
 
 from .modelos import (CodigoError, ErrorGestor, FormatoInfo, InfoContenido,
                       TipoFormato)
+from .config import localizar_deno
 from .errores import traducir_excepcion
 from .validacion import validar_url
 
@@ -87,6 +88,9 @@ def _extraer_con_ytdlp(url: str) -> dict[str, Any]:
         "noplaylist": True,     # si la URL es de un video dentro de lista, solo ese video
         "socket_timeout": 20,
     }
+    deno = localizar_deno()
+    if deno:
+        opciones["js_runtimes"] = {"deno": {"path": str(deno)}}
     with yt_dlp.YoutubeDL(opciones) as ydl:
         info = ydl.extract_info(url, download=False)
         # sanitize_info deja solo tipos simples (dict/list/str/num), seguros de manejar.

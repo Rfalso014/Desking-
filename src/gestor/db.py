@@ -23,12 +23,16 @@ CREATE TABLE IF NOT EXISTS tareas (
     creado TEXT NOT NULL, actualizado TEXT NOT NULL,
     opciones TEXT NOT NULL DEFAULT '{}', destino_manual TEXT, carpeta_final TEXT,
     archivos TEXT NOT NULL DEFAULT '[]', error TEXT, intentos INTEGER NOT NULL DEFAULT 0,
-    notas TEXT NOT NULL DEFAULT '[]'
+    notas TEXT NOT NULL DEFAULT '[]', miniatura TEXT, duracion REAL
 );
 CREATE INDEX IF NOT EXISTS ix_tareas_estado ON tareas(estado);
 CREATE TABLE IF NOT EXISTS reglas (
     id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, activa INTEGER NOT NULL DEFAULT 1,
     prioridad INTEGER NOT NULL DEFAULT 0, condicion TEXT NOT NULL, accion TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS vinculos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL UNIQUE, nombre TEXT NOT NULL,
+    creado TEXT NOT NULL, ultimo_uso TEXT
 );
 CREATE TABLE IF NOT EXISTS preferencias (clave TEXT PRIMARY KEY, valor TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS errores (
@@ -52,6 +56,15 @@ class BaseDatos:
         with self._lock:
             self._con.execute("PRAGMA journal_mode=WAL")
             self._con.executescript(_ESQUEMA)
+            self._migrar()
+
+    def _migrar(self) -> None:
+        """Añade columnas nuevas a bases de datos creadas por versiones anteriores."""
+        columnas = {f["name"] for f in self._con.execute("PRAGMA table_info(tareas)")}
+        for nombre, tipo in (("miniatura", "TEXT"), ("duracion", "REAL")):
+            if nombre not in columnas:
+                self._con.execute(f"ALTER TABLE tareas ADD COLUMN {nombre} {tipo}")
+        self._con.commit()
 
     def cerrar(self) -> None:
         with self._lock:
@@ -122,6 +135,35 @@ class BaseDatos:
                 cur = self._con.execute("DELETE FROM tareas")
             self._con.commit()
             return cur.rowcount
+
+    # --- vínculos con extensiones (solo se guarda el HASH del token) ---------------------
+    def crear_vinculo(self, token_hash: str, nombre: str) -> int:
+        with self._lock:
+            id_ = self._con.execute("INSERT INTO vinculos (token_hash, nombre, creado) VALUES (?,?,?)",
+                                    (token_hash, nombre, _ahora())).lastrowid
+            self._con.commit()
+            return id_
+
+    def buscar_vinculo(self, token_hash: str) -> dict | None:
+        with self._lock:
+            f = self._con.execute("SELECT id, nombre, creado, ultimo_uso FROM vinculos WHERE token_hash = ?",
+                                  (token_hash,)).fetchone()
+        return dict(f) if f else None
+
+    def tocar_vinculo(self, id_: int) -> None:
+        with self._lock:
+            self._con.execute("UPDATE vinculos SET ultimo_uso = ? WHERE id = ?", (_ahora(), id_))
+            self._con.commit()
+
+    def listar_vinculos(self) -> list[dict]:
+        with self._lock:
+            return [dict(f) for f in self._con.execute(
+                "SELECT id, nombre, creado, ultimo_uso FROM vinculos ORDER BY id DESC").fetchall()]
+
+    def eliminar_vinculo(self, id_: int) -> None:
+        with self._lock:
+            self._con.execute("DELETE FROM vinculos WHERE id = ?", (id_,))
+            self._con.commit()
 
     # --- errores --------------------------------------------------------------
     def registrar_error(self, tarea_id: str | None, e: ErrorGestor) -> None:

@@ -37,6 +37,27 @@ def localizar_ffmpeg() -> Path | None:
     return None
 
 
+def localizar_deno() -> Path | None:
+    """Ruta del ejecutable de Deno (runtime de JavaScript que yt-dlp usa para YouTube), o None.
+
+    Orden: GESTOR_DENO, tools/deno del proyecto, la carpeta Scripts del entorno virtual, el PATH.
+    """
+    candidatos: list[Path] = []
+    if os.environ.get("GESTOR_DENO"):
+        candidatos.append(Path(os.environ["GESTOR_DENO"]))
+    candidatos += [RAIZ_PROYECTO / "tools" / "deno" / "deno.exe", Path(sys.prefix) / "Scripts" / "deno.exe"]
+    en_path = shutil.which("deno")
+    if en_path:
+        candidatos.append(Path(en_path))
+    return next((c for c in candidatos if c.is_file()), None)
+
+
+# velocidad -> (fragmentos simultáneos, tamaño de trozo HTTP en bytes).
+# Fragmentos: muchos sitios dividen el video en trocitos (HLS/DASH) que se pueden bajar a la vez.
+# Trozo HTTP: pedir el archivo en partes de 10 MB evita que YouTube limite la velocidad.
+PERFILES_VELOCIDAD = {"normal": (1, 0), "rapida": (8, 10 * 1024 * 1024), "maxima": (16, 10 * 1024 * 1024)}
+
+
 @dataclass
 class Preferencias:
     carpeta_raiz: Path = field(default_factory=lambda: Path.home() / "Downloads" / "GestorDescargas")
@@ -49,5 +70,7 @@ class Preferencias:
     descargar_subtitulos: bool = False
     descargar_portada: bool = True
     plantilla_nombre: str = "%(title).120B [%(id)s]"
-    descargas_simultaneas: int = 2
+    descargas_simultaneas: int = 3
+    tema: str = "auto"                       # "auto" | "claro" | "oscuro"
+    velocidad: str = "rapida"               # "normal" | "rapida" | "maxima" (ver PERFILES_VELOCIDAD)
     reanudar_al_iniciar: bool = True         # recuperar tareas pendientes al abrir

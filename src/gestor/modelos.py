@@ -88,6 +88,8 @@ class Tarea:
     error: dict | None = None
     intentos: int = 0
     notas: list = field(default_factory=list)      # p. ej. qué reglas se aplicaron
+    miniatura: str | None = None
+    duracion: float | None = None
 
     def a_dict(self) -> dict:
         d = {k: getattr(self, k) for k in self.__dataclass_fields__}
@@ -109,6 +111,7 @@ class CodigoError(str, Enum):
     PROCESAMIENTO = "procesamiento"
     CONTENIDO_PROTEGIDO = "contenido_protegido"
     COMUNICACION = "comunicacion"
+    NO_VINCULADO = "no_vinculado"
     CONFIGURACION = "configuracion"
     CANCELADO = "cancelado"
     DESCONOCIDO = "desconocido"

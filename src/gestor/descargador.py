@@ -54,6 +54,9 @@ class OpcionesDescarga:
     portada: bool = True
     plantilla_nombre: str = "%(title).120B [%(id)s]"
     ffmpeg_dir: Path | None = None
+    fragmentos: int = 8                       # fragmentos que se bajan a la vez
+    trozo_http: int = 10 * 1024 * 1024        # 0 = sin trozos
+    deno: Path | None = None                  # runtime JS para YouTube
 
     def validar(self) -> None:
         def malo(msg: str) -> ErrorGestor:
@@ -67,6 +70,10 @@ class OpcionesDescarga:
             raise malo(f"Contenedor de video no válido: {self.contenedor_video!r}.")
         if self.formato_audio not in FORMATOS_AUDIO:
             raise malo(f"Formato de audio no válido: {self.formato_audio!r}.")
+        if not (isinstance(self.fragmentos, int) and 1 <= self.fragmentos <= 32):
+            raise malo("Los fragmentos simultáneos deben estar entre 1 y 32.")
+        if not (isinstance(self.trozo_http, int) and 0 <= self.trozo_http <= 100 * 1024 * 1024):
+            raise malo("El tamaño de trozo no es válido.")
         if self.altura_max is not None and not (isinstance(self.altura_max, int) and 100 <= self.altura_max <= 8640):
             raise malo("La altura máxima debe estar entre 100 y 8640.")
         if len(self.subtitulos) > 20 or not all(_IDIOMA.match(i) for i in self.subtitulos):
@@ -128,12 +135,18 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
         "overwrites": True,             # la carpeta de trabajo es nuestra y está vacía
         "continuedl": True,             # permite reanudar si se reintenta
         "retries": 3, "fragment_retries": 3, "socket_timeout": 20,
+        "concurrent_fragment_downloads": o.fragmentos,   # velocidad: varios fragmentos a la vez
+        "buffersize": 1024 * 256,
         "progress_hooks": [hook_progreso],
         "postprocessor_hooks": [hook_progreso],
         "postprocessors": [],
     }
     if o.ffmpeg_dir:
         p["ffmpeg_location"] = str(o.ffmpeg_dir)
+    if o.trozo_http:
+        p["http_chunk_size"] = o.trozo_http
+    if o.deno:
+        p["js_runtimes"] = {"deno": {"path": str(o.deno)}}
     pp: list[dict[str, Any]] = p["postprocessors"]
 
     if o.modo in ("subtitulos", "portada"):

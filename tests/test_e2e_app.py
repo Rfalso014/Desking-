@@ -14,6 +14,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 
 def _hablar_con_host(env, mensajes):
+    mensajes = [{**m, "token": env["TOKEN_E2E"]} if m["accion"] != "ping" else m for m in mensajes]
     entrada = b"".join(struct.pack("=I", len(b)) + b for b in (json.dumps(m).encode() for m in mensajes))
     p = subprocess.run([sys.executable, "-m", "gestor.nativo.host", "chrome-extension://x/"], input=entrada,
                        capture_output=True, env=env, timeout=60, cwd=str(RAIZ / "src"))
@@ -25,7 +26,13 @@ def _hablar_con_host(env, mensajes):
 
 @pytest.fixture
 def app_en_marcha(tmp_path):
-    env = {**os.environ, "GESTOR_DATOS": str(tmp_path), "GESTOR_PIPE": rf"\\.\pipe\GestorE2E-{uuid.uuid4().hex}",
+    from gestor.db import BaseDatos
+    from gestor.vinculacion import Vinculacion
+    db = BaseDatos(tmp_path / "gestor.db")              # se vincula ANTES de abrir la app (como haría el usuario con el código)
+    v = Vinculacion(db)
+    token = v.emparejar(v.codigo_actual()[0], "E2E")
+    db.cerrar()
+    env = {"TOKEN_E2E": token, **os.environ, "GESTOR_DATOS": str(tmp_path), "GESTOR_PIPE": rf"\\.\pipe\GestorE2E-{uuid.uuid4().hex}",
            "PYTHONPATH": str(RAIZ / "src"), "QT_QPA_PLATFORM": "offscreen", "GESTOR_ESPERA_APP": "20"}
     p = subprocess.Popen([sys.executable, "-m", "gestor.app"], env=env, cwd=str(RAIZ / "src"),
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)

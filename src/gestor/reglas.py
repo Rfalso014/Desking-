@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .config import Preferencias
+from .config import PERFILES_VELOCIDAD, Preferencias
 from .catalogo import CAMPOS_ACCION
 from .descargador import OpcionesDescarga
 from .modelos import CodigoError, ErrorGestor
@@ -68,12 +68,14 @@ class Resolucion:
     explicacion: dict[str, str] = field(default_factory=dict)   # campo -> origen
     reglas_aplicadas: list[str] = field(default_factory=list)
 
-    def a_opciones(self, prefs: Preferencias, ffmpeg_dir: Path | None) -> OpcionesDescarga:
+    def a_opciones(self, prefs: Preferencias, ffmpeg_dir: Path | None, deno: Path | None = None) -> OpcionesDescarga:
         c = self.campos
+        fragmentos, trozo = PERFILES_VELOCIDAD.get(prefs.velocidad, PERFILES_VELOCIDAD["rapida"])
         return OpcionesDescarga(
             modo=c["modo"], altura_max=c["altura_max"], contenedor_video=c["contenedor_video"],
             formato_audio=c["formato_audio"], subtitulos=tuple(c["subtitulos"]), portada=c["portada"],
-            plantilla_nombre=prefs.plantilla_nombre, ffmpeg_dir=ffmpeg_dir)
+            plantilla_nombre=prefs.plantilla_nombre, ffmpeg_dir=ffmpeg_dir,
+            fragmentos=fragmentos, trozo_http=trozo, deno=deno)
 
     def texto(self) -> list[str]:
         return [f"{k} = {self.campos.get(k)!r}  (origen: {o})" for k, o in self.explicacion.items()]

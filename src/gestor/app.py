@@ -9,6 +9,7 @@ from .cola import GestorCola
 from .config import carpeta_datos, localizar_ffmpeg
 from .db import BaseDatos
 from .ipc import ServidorIPC
+from .vinculacion import Vinculacion
 
 
 def crear_nucleo(ruta_db=None) -> tuple[BaseDatos, GestorCola]:
@@ -43,10 +44,12 @@ def main() -> int:
     from .ui.ventana import VentanaPrincipal
 
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")        # base uniforme sobre la que se aplica nuestro tema
     app.setApplicationName("Gestor de Descargas")
     db, cola = crear_nucleo()
     try:
-        ipc = ServidorIPC(cola)       # falla si ya hay otra copia abierta (la tubería está ocupada)
+        vinculacion = Vinculacion(db)
+        ipc = ServidorIPC(cola, vinculacion=vinculacion)       # falla si ya hay otra copia abierta (la tubería está ocupada)
     except OSError:
         QMessageBox.information(None, "Gestor de Descargas", "La aplicación ya está abierta.")
         return 0
@@ -54,7 +57,7 @@ def main() -> int:
     cola.iniciar()
     cola.recuperar()
     cola.limpiar_temporales()
-    ventana = VentanaPrincipal(cola)
+    ventana = VentanaPrincipal(cola, vinculacion)
     ventana.show()
     codigo = app.exec()
     ipc.detener()
