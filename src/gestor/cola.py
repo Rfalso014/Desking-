@@ -82,10 +82,14 @@ class GestorCola:
         return ids
 
     # --- API pública ------------------------------------------------------------
-    def detectar(self, url: str, origen: str | None = None) -> Tarea:
-        """Registra un recurso detectado (estado DETECTADO) sin empezar a descargar."""
+    def detectar(self, url: str, origen: str | None = None, opciones: dict | None = None) -> Tarea:
+        """Registra un recurso detectado (estado DETECTADO) SIN descargar: espera la autorización del usuario.
+
+        Las opciones elegidas (p. ej. «solo audio») se guardan y se usan cuando el usuario pulse «Descargar».
+        """
         url = validar_url(url, permitir_interno=self._permitir_interno)
-        t = self.db.crear_tarea(url, origen=origen, estado=EstadoTarea.DETECTADO)
+        self._validar_elecciones(opciones)
+        t = self.db.crear_tarea(url, origen=origen, opciones=opciones, estado=EstadoTarea.DETECTADO)
         self._publicar(t)
         # Los datos (título, miniatura, compatibilidad) se obtienen en segundo plano; la tarea espera en
         # «Detectado» hasta que el usuario pulse «Descargar» (o la elimine).
@@ -140,7 +144,7 @@ class GestorCola:
         if t.estado != EstadoTarea.DETECTADO:
             raise ErrorGestor(CodigoError.CONFIGURACION, "Solo se pueden iniciar tareas detectadas.")
         self._validar_elecciones(opciones)
-        t.estado, t.opciones, t.destino_manual = EstadoTarea.PENDIENTE, opciones or {}, destino_manual
+        t.estado, t.opciones, t.destino_manual = EstadoTarea.PENDIENTE, opciones or t.opciones or {}, destino_manual or t.destino_manual
         self._publicar(t)
         self._cola.put(t.id)
         return t

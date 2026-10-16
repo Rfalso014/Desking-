@@ -299,10 +299,12 @@ async function refrescarCola() {
   if (!r.ok) { ul.replaceChildren(el("li", { clase: "vacio" }, "No se puede mostrar la cola sin conexión.")); return; }
   estado.tareas = r.datos.tareas;
   const activas = estado.tareas.filter((t) => ESTADOS_ACTIVOS.includes(t.estado));
-  $("contador-cola").hidden = !activas.length;
-  $("contador-cola").textContent = activas.length;
-  chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
-  chrome.action.setBadgeText({ text: activas.length ? String(activas.length) : "" });
+  const porAutorizar = estado.tareas.filter((t) => t.estado === "detectado");
+  const aviso = activas.length + porAutorizar.length;
+  $("contador-cola").hidden = !aviso;
+  $("contador-cola").textContent = aviso;
+  chrome.action.setBadgeBackgroundColor({ color: activas.length ? "#2563eb" : "#d97706" });
+  chrome.action.setBadgeText({ text: activas.length ? String(activas.length) : porAutorizar.length ? String(porAutorizar.length) : "" });
   if (estado.tab !== "cola") return;
 
   const s = resumenCola(estado.tareas);

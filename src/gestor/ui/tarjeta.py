@@ -146,7 +146,8 @@ class TarjetaTarea(QFrame):
             self.progreso.setText({
                 "analizando": "Leyendo los datos del enlace…", "pendiente": "En espera de su turno",
                 "procesando": "Uniendo y convirtiendo archivos…", "completado": t.carpeta_final or "",
-                "cancelado": " ".join(t.notas) or "Cancelada", "detectado": " ".join(t.notas) or "Listo para descargar",
+                "cancelado": " ".join(t.notas) or "Cancelada",
+                "detectado": "Esperando tu autorización: pulsa «Descargar»." + ("  " + " ".join(t.notas) if t.notas else ""),
                 "error": ""}[e])
         self.progreso.setVisible(bool(self.progreso.text()))
 

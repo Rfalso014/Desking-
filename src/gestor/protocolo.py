@@ -30,7 +30,7 @@ _ESTADOS = {e.value for e in EstadoTarea}
 ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "ping": (set(), set()),
     "analizar": ({"url"}, set()),
-    "detectar": ({"url"}, {"origen"}),
+    "detectar": ({"url"}, {"origen", "opciones"}),
     "encolar": ({"url"}, {"origen", "opciones"}),
     "iniciar": ({"id"}, {"opciones"}),
     "listar": (set(), {"estados", "texto", "limite"}),

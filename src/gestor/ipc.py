@@ -85,7 +85,7 @@ class Manejador:
             r = c.analizar(d["url"])
             return info_resumen(r["info"], r["diagnostico"])
         if accion == "detectar":
-            return tarea_resumen(c.detectar(d["url"], d.get("origen")))
+            return tarea_resumen(c.detectar(d["url"], d.get("origen"), d.get("opciones")))
         if accion == "encolar":
             return tarea_resumen(c.encolar(d["url"], origen=d.get("origen"), opciones=d.get("opciones")))
         if accion == "limpiar":

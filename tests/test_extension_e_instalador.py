@@ -95,3 +95,16 @@ def test_instalar_y_desinstalar(tmp_path, base_falsa):
     assert instalador.estado(bases=base_falsa)[base_falsa[0]] is None
     assert not (tmp_path / "nativo").exists() and not (tmp_path / "host.json").exists()
     instalador.desinstalar(datos=tmp_path, bases=base_falsa)           # repetir no falla
+
+
+def test_el_boton_flotante_y_el_menu_no_descargan_solo_anaden_a_la_lista():
+    """Regla de producto: nada se descarga sin que el usuario pulse «Descargar»."""
+    fondo = (EXT / "background.js").read_text(encoding="utf-8")
+    contenido = (EXT / "content.js").read_text(encoding="utf-8")
+    menu = fondo[fondo.index("const MENU"):fondo.index("chrome.runtime.onInstalled")]
+    assert 'id: "detectar"' in menu and "encolar" not in menu
+    manejador_menu = fondo[fondo.index("chrome.contextMenus.onClicked"):fondo.index("// --- Insignia")]
+    assert 'enviar("detectar"' in manejador_menu and 'enviar("encolar"' not in manejador_menu
+    manejador_boton = fondo[fondo.index('msg.tipo === "detectar-pagina"'):]
+    assert 'enviar("detectar"' in manejador_boton and 'enviar("encolar"' not in manejador_boton
+    assert "detectar-pagina" in contenido and "encolar" not in contenido

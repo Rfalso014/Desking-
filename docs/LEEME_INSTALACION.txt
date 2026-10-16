@@ -17,8 +17,9 @@ La aplicación (GestorDescargas.exe) es la que descarga. La extensión del naveg
    Abre la extensión (icono en la barra del navegador) y escríbelo. El código dura 10 minutos y sirve una sola vez.
    Sin este paso la aplicación ignora a la extensión. Puedes revocar la vinculación desde la aplicación.
 
-5. Prueba: pasa el cursor sobre un video y pulsa "Descargar", o clic derecho sobre un enlace >
-   "Descargar con Gestor de Descargas".
+5. Prueba: pasa el cursor sobre un video y pulsa "+ Añadir", o clic derecho sobre un enlace >
+   "Añadir a Gestor de Descargas". Eso SOLO lo agrega a tu lista (estado "Detectado"): no se descarga nada
+   hasta que tú pulses "Descargar" en la pestaña Cola de la extensión o en la aplicación.
 
 Notas
 - FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).

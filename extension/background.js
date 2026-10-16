@@ -74,7 +74,7 @@ function enviarSinToken(accion, datos, token) {
 // --- Menú contextual --------------------------------------------------------
 // Un solo elemento: así Chrome lo muestra directamente en el menú, sin submenú.
 const MENU = [
-  { id: "encolar", title: "Descargar con Gestor de Descargas", contexts: ["link", "video", "audio", "image"] },
+  { id: "detectar", title: "Añadir a Gestor de Descargas", contexts: ["link", "video", "audio", "image"] },
 ];
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -95,17 +95,21 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     await avisar("Este elemento no tiene una dirección que se pueda descargar.");
     return;
   }
-  const r = await enviar("encolar", { url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined });
-  if (!r.ok) await avisar((r.error && r.error.mensaje) || "No se pudo añadir a la cola.");
+  // Solo se AÑADE a la lista de detectados; la descarga empieza cuando el usuario pulse «Descargar».
+  const r = await enviar("detectar", { url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined });
+  if (!r.ok) await avisar((r.error && r.error.mensaje) || "No se pudo añadir a la lista.");
   else await actualizarInsignia();
 });
 
 // --- Insignia con el número de descargas activas ----------------------------
 async function actualizarInsignia() {
-  const r = await enviar("listar", { estados: ESTADOS_ACTIVOS, limite: 50 });
-  const n = r.ok ? r.datos.tareas.length : 0;
-  await chrome.action.setBadgeBackgroundColor({ color: "#1a73e8" });
-  await chrome.action.setBadgeText({ text: n ? String(n) : "" });
+  const r = await enviar("listar", { estados: [...ESTADOS_ACTIVOS, "detectado"], limite: 100 });
+  const tareas = r.ok ? r.datos.tareas : [];
+  const activas = tareas.filter((t) => t.estado !== "detectado").length;
+  const porAutorizar = tareas.length - activas;
+  // Azul = descargando; naranja = hay enlaces esperando tu autorización.
+  await chrome.action.setBadgeBackgroundColor({ color: activas ? "#1a73e8" : "#d97706" });
+  await chrome.action.setBadgeText({ text: activas ? String(activas) : porAutorizar ? String(porAutorizar) : "" });
 }
 
 // --- Mensajes del popup -----------------------------------------------------
@@ -119,7 +123,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     enviar(msg.accion, msg.datos).then(responder);
     return true; // respuesta asíncrona
   }
-  if (msg.tipo === "encolar-pagina") {      // botón flotante sobre un video (content.js)
+  if (msg.tipo === "detectar-pagina") {      // botón flotante sobre un video (content.js): solo añade a la lista
     const url = elegirUrlParaVideo(msg.candidatas);
     if (!url) {
       responder(fallo({ codigo: "url_invalida", mensaje: "Este video no tiene una dirección descargable." }));
@@ -131,7 +135,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
       const opciones = { modo };
       if (altura === "mejor") opciones.altura_max = null;
       else if (/^\d+$/.test(altura || "")) opciones.altura_max = Number(altura);
-      return enviar("encolar", { url, origen, opciones });
+      return enviar("detectar", { url, origen, opciones });
     }).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
     return true;
   }

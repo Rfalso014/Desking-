@@ -197,3 +197,21 @@ def test_limpiar_temporales_solo_los_que_sobran(entorno):
     (base / t.id).mkdir()
     assert cola.limpiar_temporales() == 1
     assert not huerfana.exists() and (base / t.id).exists()     # la tarea con ERROR conserva su avance
+
+
+def test_un_enlace_detectado_nunca_se_descarga_sin_autorizacion(entorno):
+    """Lo que envía la extensión (botón flotante / menú) solo se agrega a la lista: la descarga exige «iniciar»."""
+    cola, db, _ = entorno
+    llamadas = []
+    cola._extraer = lambda url, **kw: InfoContenido(url, "Título", "Sitio")
+    cola._descargar = lambda *a, **k: llamadas.append(1) or pytest.fail("se descargó sin autorización")
+    t = cola.detectar("http://127.0.0.1:1/x", origen="http://pagina", opciones={"modo": "audio"})
+    time.sleep(1.0)                                    # los hilos de trabajo están activos: no deben tocarlo
+    t = cola.obtener(t.id)
+    assert t.estado == EstadoTarea.DETECTADO and llamadas == []
+    assert t.opciones == {"modo": "audio"}             # recuerda lo que el usuario eligió
+    # Solo la orden explícita lo pone en marcha, y conserva sus opciones.
+    cola._descargar = lambda *a, **k: (_ for _ in ()).throw(ErrorGestor(CodigoError.CONEXION, "no importa"))
+    cola.iniciar_detectada(t.id)
+    assert cola.obtener(t.id).opciones == {"modo": "audio"}
+    assert esperar(cola, t.id, FINALES).estado == EstadoTarea.ERROR     # llegó a intentarlo SOLO tras la orden

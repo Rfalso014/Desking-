@@ -32,8 +32,8 @@
       .sep { width: 1px; background: rgba(255,255,255,.4); }
     `;
   const crear = (tag, props = {}) => Object.assign(document.createElement(tag), props);
-  const btnVideo = crear("button", { id: "video", textContent: "⬇ Descargar", title: "Descargar este video con Gestor de Descargas" });
-  const btnAudio = crear("button", { id: "audio", textContent: "♪", title: "Descargar solo el audio" });
+  const btnVideo = crear("button", { id: "video", textContent: "＋ Añadir", title: "Añadir este video a la lista de Gestor de Descargas (no descarga hasta que tú lo autorices)" });
+  const btnAudio = crear("button", { id: "audio", textContent: "♪", title: "Añadir solo el audio a la lista" });
   const pildora = crear("div", { className: "pildora", role: "group" });
   pildora.setAttribute("aria-label", "Gestor de Descargas");
   pildora.append(btnVideo, crear("span", { className: "sep" }), btnAudio);
@@ -127,10 +127,10 @@
       const datos = candidatas(videoActual);
       mostrar(boton, "Enviando…", 10000);
       try {
-        chrome.runtime.sendMessage({ tipo: "encolar-pagina", candidatas: datos, modo }, (r) => {
+        chrome.runtime.sendMessage({ tipo: "detectar-pagina", candidatas: datos, modo }, (r) => {
           ocupado = false;
           if (chrome.runtime.lastError || !r) return mostrar(boton, "✗ Sin respuesta");
-          mostrar(boton, r.ok ? "✓ Añadido" : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
+          mostrar(boton, r.ok ? "✓ En la lista" : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
         });
       } catch {
         ocupado = false;
