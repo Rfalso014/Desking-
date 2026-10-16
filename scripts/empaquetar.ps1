@@ -30,6 +30,7 @@ Remove-Item "dist\GestorHost.exe"
 Copy-Item "extension" (Join-Path $destino "extension") -Recurse
 Remove-Item (Join-Path $destino "extension\test") -Recurse -Force
 if (Test-Path "tools\ffmpeg") { Copy-Item "tools\ffmpeg" (Join-Path $destino "tools\ffmpeg") -Recurse }
+if (Test-Path ".venv\Scripts\deno.exe") { New-Item -ItemType Directory -Force (Join-Path $destino "tools\deno") | Out-Null; Copy-Item ".venv\Scripts\deno.exe" (Join-Path $destino "tools\deno") }
 Copy-Item "docs\LEEME_INSTALACION.txt" $destino
 
 Compress-Archive -Path $destino -DestinationPath "dist\GestorDescargas.zip" -Force

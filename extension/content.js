@@ -7,6 +7,15 @@
 
   const MIN_ANCHO = 200, MIN_ALTO = 110;
 
+  // El usuario puede desactivar el botón en los Ajustes de la extensión.
+  let activo = true;
+  try {
+    chrome.storage.local.get(["botonFlotante"], (r) => { activo = !r || r.botonFlotante !== false; });
+    chrome.storage.onChanged.addListener((cambios, area) => {
+      if (area === "local" && cambios.botonFlotante) { activo = cambios.botonFlotante.newValue !== false; if (!activo) ocultar(); }
+    });
+  } catch { /* la extensión se recargó: este script queda inactivo */ }
+
   // --- Interfaz en un Shadow DOM cerrado: los estilos de la página no la rompen ---------
   const anfitrion = document.createElement("div");
   anfitrion.style.cssText = "all:initial;position:fixed;z-index:2147483647;top:0;left:0;width:0;height:0;";
@@ -64,6 +73,7 @@
   // Los reproductores ponen capas encima del <video>, así que se busca por posición del cursor.
   let pendiente = false, ultimoX = 0, ultimoY = 0;
   function alMover(e) {
+    if (!activo) return;
     ultimoX = e.clientX; ultimoY = e.clientY;
     if (pendiente) return;
     pendiente = true;
@@ -116,11 +126,16 @@
       if (!e.isTrusted || !videoActual) return;   // ignora clics fabricados por scripts de la página
       const datos = candidatas(videoActual);
       mostrar(boton, "Enviando…", 10000);
-      chrome.runtime.sendMessage({ tipo: "encolar-pagina", candidatas: datos, modo }, (r) => {
+      try {
+        chrome.runtime.sendMessage({ tipo: "encolar-pagina", candidatas: datos, modo }, (r) => {
+          ocupado = false;
+          if (chrome.runtime.lastError || !r) return mostrar(boton, "✗ Sin respuesta");
+          mostrar(boton, r.ok ? "✓ Añadido" : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
+        });
+      } catch {
         ocupado = false;
-        if (chrome.runtime.lastError || !r) return mostrar(boton, "✗ Sin respuesta");
-        mostrar(boton, r.ok ? "✓ Añadido" : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
-      });
+        mostrar(boton, "✗ Recarga la página");     // la extensión se actualizó mientras la página estaba abierta
+      }
     };
   }
   btnVideo.addEventListener("click", enviar(btnVideo, "video"));

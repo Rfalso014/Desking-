@@ -40,6 +40,21 @@ def test_content_script_es_seguro():
     assert "import " not in c and "export " not in c    # los content scripts clásicos no usan módulos
 
 
+def test_el_popup_solo_usa_elementos_que_existen_en_el_html():
+    import re
+    html = (EXT / "popup.html").read_text(encoding="utf-8")
+    js = (EXT / "popup.js").read_text(encoding="utf-8")
+    ids_html = set(re.findall(r'id="([^"]+)"', html))
+    usados = set(re.findall(r'\$\("([^"]+)"\)', js)) | {f"pestana-{n}" for n in ("pagina", "cola", "ajustes")}
+    assert usados - ids_html == set(), f"El JS usa ids que no existen en el HTML: {usados - ids_html}"
+    assert "popup.js" in html and 'type="module"' in html
+
+
+def test_el_boton_flotante_respeta_el_ajuste_del_usuario():
+    c = (EXT / "content.js").read_text(encoding="utf-8")
+    assert "botonFlotante" in c and "if (!activo) return;" in c
+
+
 def test_popup_no_usa_innerhtml():
     # Regla de seguridad: el texto de páginas externas se inserta solo con textContent.
     for f in ("popup.js", "background.js", "util.js", "content.js"):

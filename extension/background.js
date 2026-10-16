@@ -37,8 +37,22 @@ function conectar() {
   return puerto;
 }
 
+// Token de vinculación: lo entrega la aplicación cuando el usuario escribe su código. Se guarda solo en este navegador.
+async function leerToken() {
+  const { token } = await chrome.storage.local.get("token");
+  return typeof token === "string" ? token : undefined;
+}
+
 /** Envía una acción a la app y devuelve la respuesta ({ok, datos} o {ok:false, error}). */
-export function enviar(accion, datos = {}) {
+export async function enviar(accion, datos = {}) {
+  const token = accion === "emparejar" ? undefined : await leerToken();
+  const r = await enviarSinToken(accion, datos, token);
+  if (r.ok && accion === "emparejar" && r.datos && r.datos.token) await chrome.storage.local.set({ token: r.datos.token });
+  if (r.ok && accion === "desvincular") await chrome.storage.local.remove("token");
+  return r;
+}
+
+function enviarSinToken(accion, datos, token) {
   return new Promise((resolve) => {
     const id = `m${Date.now().toString(36)}${(contador++).toString(36)}`;
     const timer = setTimeout(() => {
@@ -47,7 +61,7 @@ export function enviar(accion, datos = {}) {
     }, TIEMPO_ESPERA_MS);
     pendientes.set(id, { resolve, timer });
     try {
-      conectar().postMessage({ v: 1, id, accion, datos });
+      conectar().postMessage({ v: 1, id, accion, datos, ...(token ? { token } : {}) });
     } catch (e) {
       clearTimeout(timer);
       pendientes.delete(id);
@@ -97,6 +111,10 @@ async function actualizarInsignia() {
 // --- Mensajes del popup -----------------------------------------------------
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   if (sender.id !== chrome.runtime.id || !msg) return false;
+  if (msg.tipo === "olvidar-token") {
+    chrome.storage.local.remove("token").then(() => responder({ ok: true }));
+    return true;
+  }
   if (msg.tipo === "nativo") {
     enviar(msg.accion, msg.datos).then(responder);
     return true; // respuesta asíncrona
@@ -109,7 +127,12 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
     }
     const modo = msg.modo === "audio" ? "audio" : "video";   // lista blanca: lo demás se ignora
     const origen = sender.tab && esUrlWeb(sender.tab.url) ? sender.tab.url : undefined;
-    enviar("encolar", { url, origen, opciones: { modo } }).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
+    chrome.storage.local.get(["altura"]).then(({ altura }) => {
+      const opciones = { modo };
+      if (altura === "mejor") opciones.altura_max = null;
+      else if (/^\d+$/.test(altura || "")) opciones.altura_max = Number(altura);
+      return enviar("encolar", { url, origen, opciones });
+    }).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
     return true;
   }
   return false;

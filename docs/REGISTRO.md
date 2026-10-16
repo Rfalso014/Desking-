@@ -8,6 +8,9 @@
 - **Cambio respecto al plan inicial:** la extensión está en JavaScript (módulos ES) en vez de TypeScript, para no
   añadir un paso de compilación. Se prueba con `node --test`. Migrar a TypeScript es posible más adelante.
 - Cada tarea descarga en una carpeta temporal propia (`<raíz>/.tmp/<id>`); al terminar, el organizador mueve a destino.
+- **Vinculación por código (2026-10-16):** la app muestra un código de 8 caracteres (10 min, un solo uso, bloqueo tras 5 fallos); la extensión lo escribe y recibe un token aleatorio de 256 bits que envía en cada mensaje. La app solo guarda su hash SHA-256 y puede revocarlo. Sin token válido solo responden `ping` y `emparejar`.
+- **Quién hace qué:** la extensión solo obtiene datos (detecta recursos, pide análisis) y da órdenes (descargar, cancelar, reintentar, eliminar, abrir carpeta, limpiar). Toda descarga la ejecuta la aplicación. Los recursos enviados con «Enviar a la app» quedan en estado Detectado hasta que se pulsa Descargar.
+- **Velocidad:** perfiles Normal/Rápida/Máxima = fragmentos simultáneos (1/8/16) + trozos HTTP de 10 MB (evita el estrangulamiento de YouTube) + 3 descargas a la vez; Deno (2.9.7, paquete `deno` de PyPI) como runtime JS para yt-dlp. No hay medición comparativa fiable: con un video de 19 s la diferencia es nula.
 - La extensión NO puede elegir rutas absolutas: solo una `subcarpeta` relativa. Las rutas manuales se eligen en la app.
 - El DRM solo se bloquea cuando está **confirmado** (todos los formatos con `has_drm`); un servicio "conocido" es solo indicio.
 
@@ -66,3 +69,8 @@
 - content.js: boton al pasar el cursor sobre un <video> (>=200x110) con 'Descargar' y 'solo audio'. Verificado en un navegador con una pagina local y chrome.runtime simulado (aparece aunque haya una capa encima, usa el enlace que envuelve al video, no aparece en videos pequenos, se oculta al salir).
 - Coste de privacidad: la extension ahora corre en todas las paginas http/https (aviso de Chrome 'leer y cambiar datos en todos los sitios'). El script solo lee el DOM localmente y envia algo unicamente tras un clic de confianza (isTrusted).
 - El menu contextual quedo con un solo elemento para que no sea submenu.
+
+## Rediseño y extensión v2 (2026-10-16)
+- Aplicación: barra lateral, tarjetas por descarga (miniatura, estado, progreso, velocidad, ETA, errores con causa/solución), filtros, tema claro/oscuro/automático, página «Extensión» con el código de vinculación, sugerencia al copiar un enlace.
+- Extensión: pestañas Esta página / Cola / Ajustes, análisis con compatibilidad, recursos detectados con selección múltiple, cola con filtros y búsqueda, ajustes (botón flotante, valores por defecto, desvincular).
+- Verificado: popup en un navegador con la API de Chrome simulada; ventana de la app con capturas reales (claro y oscuro). NO verificado: la extensión cargada en un Chrome real con YouTube.

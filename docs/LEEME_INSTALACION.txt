@@ -1,23 +1,30 @@
 GESTOR DE DESCARGAS - Instalación (Windows)
 ===========================================
 
+La aplicación (GestorDescargas.exe) es la que descarga. La extensión del navegador solo detecta videos y le manda
+órdenes a la aplicación («Descargar», «Cancelar», «Eliminar»).
+
 1. Descomprime esta carpeta donde quieras (por ejemplo C:\Gestor). No la muevas después de instalar.
 
-2. Abre GestorDescargas.exe.
-   - Pestaña Configuración > "Instalar conexión con el navegador".
-     (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host )
+2. Abre GestorDescargas.exe y entra en la pestaña "Extensión".
+   Paso 1: pulsa "Instalar conexión" (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host ).
 
-3. En Chrome o Edge: abre chrome://extensions (o edge://extensions), activa "Modo desarrollador",
+3. Paso 2: en Chrome o Edge abre chrome://extensions (o edge://extensions), activa "Modo de desarrollador",
    pulsa "Cargar descomprimida" y elige la carpeta "extension" de esta instalación.
    El ID de la extensión es fijo y es el único autorizado por la conexión.
 
-4. Prueba: clic derecho sobre un enlace > "Añadir a la cola de descargas".
+4. Paso 3 (vincular): la pestaña "Extensión" de la aplicación muestra un CÓDIGO de 8 caracteres (ej. K7M2-9QXA).
+   Abre la extensión (icono en la barra del navegador) y escríbelo. El código dura 10 minutos y sirve una sola vez.
+   Sin este paso la aplicación ignora a la extensión. Puedes revocar la vinculación desde la aplicación.
+
+5. Prueba: pasa el cursor sobre un video y pulsa "Descargar", o clic derecho sobre un enlace >
+   "Descargar con Gestor de Descargas".
 
 Notas
 - FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).
-- Para YouTube y otros sitios puede hacer falta un entorno JavaScript externo (Deno) que NO se incluye:
-  instálalo desde https://deno.com si yt-dlp lo pide.
+- Deno viene en tools\deno: yt-dlp lo usa para YouTube y otros sitios que lo requieren.
+- Velocidad: Configuración > Velocidad (Normal / Rápida / Máxima). Descarga varios fragmentos a la vez.
 - Las galerías de imágenes (gallery-dl) solo funcionan en la versión de desarrollo con Python.
-- Desinstalar: GestorDescargas.exe --desinstalar-host, y borra la carpeta.
+- Desinstalar: GestorDescargas.exe --desinstalar-host, y borra la carpeta. Los datos están en %USERPROFILE%\.gestor-descargas.
 - Actualizar yt-dlp: los sitios cambian a menudo. En la versión con Python: scripts\actualizar_ytdlp.py.
   En la versión empaquetada hay que descargar una versión nueva del programa.

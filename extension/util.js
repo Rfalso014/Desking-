@@ -92,3 +92,69 @@ export function formatearTamano(bytes) {
   const mb = bytes / 1048576;
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
 }
+
+/** Nombre que se le muestra a la app para identificar este navegador en la lista de vinculados. */
+export function nombreNavegador(ua) {
+  const u = String(ua || "");
+  const navegador = /Edg\//.test(u) ? "Edge" : /OPR\//.test(u) ? "Opera" : /Firefox\//.test(u) ? "Firefox" : /Chrome\//.test(u) ? "Chrome" : "Navegador";
+  return `${navegador} en este equipo`;
+}
+
+/** Deja el código como XXXX-XXXX mientras se escribe (solo letras y números, en mayúsculas, máximo 8). */
+export function formatearCodigo(texto) {
+  const limpio = String(texto || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return limpio.length > 4 ? `${limpio.slice(0, 4)}-${limpio.slice(4)}` : limpio;
+}
+
+export function formatearVelocidad(bps) {
+  if (!bps || bps <= 0) return "";
+  if (bps >= 1048576) return `${(bps / 1048576).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+  return `${Math.round(bps)} B/s`;
+}
+
+export function formatearEta(seg) {
+  if (seg == null || seg < 0) return "";
+  seg = Math.round(seg);
+  if (seg >= 3600) return `${Math.floor(seg / 3600)} h ${Math.floor((seg % 3600) / 60)} min`;
+  if (seg >= 60) return `${Math.floor(seg / 60)} min ${seg % 60} s`;
+  return `${seg} s`;
+}
+
+export function formatearDuracion(seg) {
+  if (!seg) return "";
+  seg = Math.round(seg);
+  const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60;
+  const dos = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${dos(m)}:${dos(s)}` : `${m}:${dos(s)}`;
+}
+
+const PENDIENTES = ["pendiente", "detectado"];
+
+/** Filtra la cola por categoría y por texto (título, sitio o URL). */
+export function filtrarTareas(tareas, filtro, texto = "") {
+  const q = String(texto).trim().toLowerCase();
+  return tareas.filter((t) => {
+    const ok = filtro === "activas" ? ESTADOS_ACTIVOS.includes(t.estado) || PENDIENTES.includes(t.estado)
+      : filtro === "completadas" ? t.estado === "completado"
+      : filtro === "errores" ? t.estado === "error"
+      : true;
+    return ok && (!q || [t.titulo, t.sitio, t.url].some((x) => (x || "").toLowerCase().includes(q)));
+  });
+}
+
+/** Resumen para la franja superior de la cola. */
+export function resumenCola(tareas) {
+  const descargando = tareas.filter((t) => t.estado === "descargando");
+  return {
+    descargando: descargando.length,
+    enEspera: tareas.filter((t) => t.estado === "pendiente" || t.estado === "analizando").length,
+    detectados: tareas.filter((t) => t.estado === "detectado").length,
+    velocidad: descargando.reduce((a, t) => a + (t.velocidad || 0), 0),
+  };
+}
+
+/** Solo se cargan miniaturas http/https (nunca data:, javascript: ni blob:). */
+export function miniaturaSegura(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url) ? url : null;
+}

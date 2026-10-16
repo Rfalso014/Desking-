@@ -7,63 +7,124 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header>
-    <h1>Gestor de Descargas</h1>
-    <span id="conexion" class="chip" role="status">Conectando…</span>
+  <header class="cabecera">
+    <div class="marca"><span class="logo" aria-hidden="true">⬇</span><div><h1>Gestor de Descargas</h1>
+      <p class="lema">La descarga la hace tu aplicación</p></div></div>
+    <span id="estado-conexion" class="punto" role="status"><i></i><span>Conectando…</span></span>
   </header>
 
-  <div id="aviso" class="aviso" hidden></div>
+  <div id="aviso" class="aviso" role="alert" hidden></div>
 
-  <section id="analisis" hidden aria-live="polite">
-    <h2>Análisis</h2>
-    <div id="analisis-cuerpo"></div>
-  </section>
+  <!-- 1) Sin conexión con la aplicación -->
+  <main id="vista-conexion" class="vista" hidden>
+    <div class="tarjeta centrada">
+      <div class="ilustracion" aria-hidden="true">⚠</div>
+      <h2 id="conexion-titulo">No se pudo conectar con la aplicación</h2>
+      <p id="conexion-texto" class="tenue"></p>
+      <div class="acciones centro"><button id="btn-reintentar-conexion">Reintentar</button></div>
+    </div>
+  </main>
 
-  <section>
-    <div class="fila-titulo">
-      <h2>Recursos detectados</h2>
-      <button id="btn-detectar" class="sec">Buscar en esta página</button>
+  <!-- 2) Falta vincular con el código -->
+  <main id="vista-vincular" class="vista" hidden>
+    <div class="tarjeta">
+      <h2>Vincula la extensión</h2>
+      <p class="tenue">Por seguridad, la aplicación solo obedece a extensiones vinculadas. Abre la aplicación, entra en la pestaña
+        <b>Extensión</b> y escribe aquí el código que muestra.</p>
+      <label for="codigo" class="etiqueta">Código de vinculación</label>
+      <input id="codigo" class="codigo" inputmode="text" autocomplete="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX" aria-describedby="codigo-ayuda">
+      <p id="codigo-ayuda" class="ayuda">8 letras y números. Dura 10 minutos y sirve una sola vez.</p>
+      <div class="acciones"><button id="btn-vincular" class="primario" disabled>Vincular</button></div>
     </div>
-    <p id="detectados-nota" class="nota">Pulsa «Buscar en esta página» para listar videos, audios, imágenes y enlaces.
-      Algunos reproductores no muestran la dirección real del video: en ese caso usa «Añadir esta página».</p>
-    <ul id="detectados" class="lista"></ul>
-    <div class="opciones">
-      <label>Qué descargar
-        <select id="modo">
-          <option value="video">Video</option>
-          <option value="audio">Solo audio</option>
-          <option value="subtitulos">Solo subtítulos</option>
-          <option value="portada">Solo portada</option>
-        </select>
-      </label>
-      <label>Calidad máx.
-        <select id="altura">
-          <option value="">Mejor</option>
-          <option value="1080">1080p</option>
-          <option value="720">720p</option>
-          <option value="480">480p</option>
-        </select>
-      </label>
-    </div>
-    <div class="botones">
-      <button id="btn-analizar-pagina" class="sec">Analizar esta página</button>
-      <button id="btn-pagina" class="sec">Añadir esta página</button>
-      <button id="btn-anadir">Añadir seleccionados</button>
-    </div>
-  </section>
+  </main>
 
-  <section>
-    <div class="fila-titulo">
-      <h2>Cola</h2>
-      <select id="filtro" aria-label="Filtrar por estado">
-        <option value="">Todas</option>
-        <option value="activas">Activas</option>
-        <option value="error">Con error</option>
-        <option value="completado">Completadas</option>
-      </select>
-    </div>
-    <ul id="cola" class="lista"></ul>
-  </section>
+  <!-- 3) Vinculada: aplicación principal -->
+  <main id="vista-principal" class="vista" hidden>
+    <nav class="pestanas" role="tablist" aria-label="Secciones">
+      <button role="tab" data-pestana="pagina" aria-selected="true">Esta página</button>
+      <button role="tab" data-pestana="cola" aria-selected="false">Cola <span id="contador-cola" class="insignia" hidden></span></button>
+      <button role="tab" data-pestana="ajustes" aria-selected="false">Ajustes</button>
+    </nav>
+
+    <!-- Esta página -->
+    <section id="pestana-pagina" role="tabpanel">
+      <div class="tarjeta compacta">
+        <div class="pagina-info"><div id="pagina-titulo" class="titulo">—</div><div id="pagina-sitio" class="meta"></div></div>
+        <div class="opciones">
+          <label>Qué descargar
+            <select id="modo">
+              <option value="video">Video</option><option value="audio">Solo audio</option>
+              <option value="subtitulos">Solo subtítulos</option><option value="portada">Solo portada</option>
+            </select></label>
+          <label>Calidad máxima
+            <select id="altura">
+              <option value="">La de mi configuración</option><option value="mejor">La mejor</option>
+              <option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option>
+            </select></label>
+        </div>
+        <div class="acciones">
+          <button id="btn-analizar" class="sec">Analizar</button>
+          <button id="btn-descargar-pagina" class="primario">Descargar esta página</button>
+        </div>
+      </div>
+      <div id="analisis" hidden></div>
+
+      <div class="fila-titulo">
+        <h2>Recursos encontrados <span id="contador-recursos" class="insignia" hidden></span></h2>
+        <button id="btn-buscar" class="enlace">Volver a buscar</button>
+      </div>
+      <p id="recursos-nota" class="nota"></p>
+      <ul id="recursos" class="lista"></ul>
+      <div id="barra-recursos" class="acciones" hidden>
+        <button id="btn-marcar" class="enlace">Marcar todos</button>
+        <span class="espacio"></span>
+        <button id="btn-enviar" class="sec" title="La app lee sus datos y los deja en «Detectados» para que decidas">Enviar a la app</button>
+        <button id="btn-descargar-sel" class="primario">Descargar seleccionados</button>
+      </div>
+    </section>
+
+    <!-- Cola -->
+    <section id="pestana-cola" role="tabpanel" hidden>
+      <div id="resumen" class="resumen"></div>
+      <div class="barra-filtros">
+        <div class="filtros" role="group" aria-label="Filtrar">
+          <button data-filtro="todas" class="filtro activo">Todas</button><button data-filtro="activas" class="filtro">Activas</button>
+          <button data-filtro="completadas" class="filtro">Completadas</button><button data-filtro="errores" class="filtro">Errores</button>
+        </div>
+        <input id="busqueda" type="search" placeholder="Buscar…" aria-label="Buscar en la cola">
+      </div>
+      <ul id="cola" class="lista"></ul>
+      <div class="acciones">
+        <button id="btn-iniciar-todos" class="sec" hidden>Descargar todos los detectados</button>
+        <span class="espacio"></span>
+        <button id="btn-limpiar" class="enlace" title="No borra los archivos descargados">Quitar terminadas</button>
+      </div>
+    </section>
+
+    <!-- Ajustes -->
+    <section id="pestana-ajustes" role="tabpanel" hidden>
+      <div class="tarjeta">
+        <h2>Botón sobre los videos</h2>
+        <label class="interruptor"><input type="checkbox" id="aj-boton"><span>Mostrar «Descargar» al pasar el cursor sobre un video</span></label>
+        <p class="ayuda">Al activarlo o desactivarlo, las páginas ya abiertas se actualizan al instante.</p>
+      </div>
+      <div class="tarjeta">
+        <h2>Valores por defecto</h2>
+        <p class="ayuda">Se usan en el botón flotante y como valor inicial en esta ventana.</p>
+        <div class="opciones">
+          <label>Qué descargar<select id="aj-modo"><option value="video">Video</option><option value="audio">Solo audio</option></select></label>
+          <label>Calidad máxima<select id="aj-altura"><option value="">La de mi configuración</option><option value="mejor">La mejor</option>
+            <option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+        </div>
+      </div>
+      <div class="tarjeta">
+        <h2>Vinculación</h2>
+        <p id="aj-vinculo" class="tenue"></p>
+        <div class="acciones"><button id="btn-desvincular" class="peligro">Desvincular de la aplicación</button></div>
+      </div>
+      <p class="pie">La extensión solo lee las páginas en tu navegador y manda órdenes a la aplicación. No descarga archivos.</p>
+    </section>
+  </main>
 
   <script type="module" src="popup.js"></script>
 </body>

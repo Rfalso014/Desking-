@@ -1,6 +1,10 @@
-// Popup: recursos detectados + cola de descargas. Todo el texto de páginas externas se
-// inserta como texto plano (textContent / nodos de texto) para que una página no pueda inyectar código.
-import { ETIQUETA_ESTADO, ESTADOS_ACTIVOS, accionesDisponibles, esUrlWeb, formatearTamano, nombreSitio } from "./util.js";
+// Popup de la extensión. La extensión solo OBTIENE DATOS y manda órdenes («descargar», «cancelar», «eliminar»…):
+// quien descarga es siempre la aplicación de escritorio.
+// Todo el texto que viene de páginas externas se inserta como texto plano (textContent / nodos de texto).
+import {
+  ESTADOS_ACTIVOS, accionesDisponibles, esUrlWeb, filtrarTareas, formatearCodigo, formatearDuracion, formatearEta,
+  formatearTamano, formatearVelocidad, miniaturaSegura, nombreNavegador, nombreSitio, resumenCola, ETIQUETA_ESTADO,
+} from "./util.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -9,13 +13,25 @@ function el(tag, props = {}, ...hijos) {
   for (const [k, v] of Object.entries(props)) {
     if (k === "clase") e.className = v;
     else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "datos") Object.assign(e.dataset, v);
     else e[k] = v;
   }
-  for (const h of hijos) e.append(h);
+  for (const h of hijos) if (h != null) e.append(h);
   return e;
 }
 
-const nativo = (accion, datos = {}) => chrome.runtime.sendMessage({ tipo: "nativo", accion, datos });
+const estado = { tab: "pagina", filtro: "todas", busqueda: "", tareas: [], recursos: [], marcados: new Set(), temporizador: null, activa: null };
+
+// --- Comunicación con la aplicación (a través del service worker) ---------------------------
+async function nativo(accion, datos = {}) {
+  const r = await chrome.runtime.sendMessage({ tipo: "nativo", accion, datos });
+  if (r && !r.ok && r.error && r.error.codigo === "no_vinculado" && accion !== "emparejar") {
+    mostrarVista("vincular");            // el token fue revocado desde la aplicación
+  }
+  return r || { ok: false, error: { mensaje: "Sin respuesta del navegador." } };
+}
+
+const textoError = (e) => [e && e.mensaje, e && e.solucion].filter(Boolean).join(" ");
 
 function mostrarAviso(texto) {
   $("aviso").hidden = !texto;
@@ -24,21 +40,87 @@ function mostrarAviso(texto) {
 
 function opcionesElegidas() {
   const o = { modo: $("modo").value };
-  if ($("altura").value) o.altura_max = Number($("altura").value);
+  const h = $("altura").value;
+  if (h === "mejor") o.altura_max = null;
+  else if (h) o.altura_max = Number(h);
   return o;
 }
 
-// --- Conexión -----------------------------------------------------------------
-async function comprobarConexion() {
-  const r = await nativo("ping");
-  const chip = $("conexion");
-  chip.className = "chip " + (r.ok ? "ok" : "mal");
-  chip.textContent = r.ok ? "Conectado" : "Sin conexión";
-  if (!r.ok && r.error) mostrarAviso(`${r.error.mensaje} ${r.error.solucion || ""}`);
-  return r.ok;
+// --- Vistas ----------------------------------------------------------------------------------
+function ponerEstadoConexion(clase, texto) {
+  $("estado-conexion").className = `punto ${clase}`;
+  $("estado-conexion").lastElementChild.textContent = texto;
 }
 
-// --- Detección en la página --------------------------------------------------
+function mostrarVista(cual) {
+  $("vista-conexion").hidden = cual !== "conexion";
+  $("vista-vincular").hidden = cual !== "vincular";
+  $("vista-principal").hidden = cual !== "principal";
+  clearInterval(estado.temporizador);
+  if (cual === "principal") estado.temporizador = setInterval(refrescarCola, 1500);
+  if (cual === "vincular") { ponerEstadoConexion("espera", "Sin vincular"); setTimeout(() => $("codigo").focus(), 50); }
+}
+
+async function iniciar() {
+  mostrarAviso("");
+  ponerEstadoConexion("espera", "Conectando…");
+  const r = await nativo("ping");
+  if (!r.ok) {
+    ponerEstadoConexion("mal", "Sin conexión");
+    $("conexion-titulo").textContent = r.error && r.error.mensaje ? r.error.mensaje : "No se pudo conectar con la aplicación";
+    $("conexion-texto").textContent = (r.error && [r.error.causa, r.error.solucion].filter(Boolean).join(" ")) || "";
+    return mostrarVista("conexion");
+  }
+  if (!r.datos.vinculado) return mostrarVista("vincular");
+  ponerEstadoConexion("ok", "Conectado");
+  mostrarVista("principal");
+  await cargarAjustes();
+  await cargarPagina();
+  buscarRecursos();
+  refrescarCola();
+}
+
+// --- Vinculación -------------------------------------------------------------------------------
+$("codigo").addEventListener("input", (e) => {
+  e.target.value = formatearCodigo(e.target.value);
+  $("btn-vincular").disabled = e.target.value.length !== 9;
+});
+$("codigo").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("btn-vincular").disabled) vincular(); });
+$("btn-vincular").addEventListener("click", vincular);
+$("btn-reintentar-conexion").addEventListener("click", iniciar);
+
+async function vincular() {
+  $("btn-vincular").disabled = true;
+  const r = await nativo("emparejar", { codigo: $("codigo").value, nombre: nombreNavegador(navigator.userAgent) });
+  if (!r.ok) { mostrarAviso(textoError(r.error)); $("btn-vincular").disabled = false; return; }
+  $("codigo").value = "";
+  iniciar();
+}
+
+// --- Pestañas --------------------------------------------------------------------------------------
+document.querySelectorAll("[data-pestana]").forEach((b) => b.addEventListener("click", () => cambiarPestana(b.dataset.pestana)));
+function cambiarPestana(nombre) {
+  estado.tab = nombre;
+  document.querySelectorAll("[data-pestana]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.pestana === nombre)));
+  for (const n of ["pagina", "cola", "ajustes"]) $(`pestana-${n}`).hidden = n !== nombre;
+  if (nombre === "cola") refrescarCola();
+}
+
+// --- Esta página ---------------------------------------------------------------------------------------
+async function pestanaActiva() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab;
+}
+
+async function cargarPagina() {
+  const tab = await pestanaActiva();
+  estado.activa = tab;
+  const web = tab && esUrlWeb(tab.url);
+  $("pagina-titulo").textContent = web ? (tab.title || tab.url) : "Esta pestaña no es una página web";
+  $("pagina-sitio").textContent = web ? nombreSitio(tab.url) : "Abre una página con http o https para usar la extensión aquí.";
+  $("btn-analizar").disabled = $("btn-descargar-pagina").disabled = !web;
+}
+
 // Esta función se ejecuta DENTRO de la página (por eso no puede usar nada del popup).
 function detectarEnPagina() {
   const vistos = new Map();
@@ -46,152 +128,225 @@ function detectarEnPagina() {
   const anadir = (tipo, u, nombre) => { const h = web(u); if (h && !vistos.has(h) && vistos.size < 100) vistos.set(h, { tipo, url: h, nombre: (nombre || "").slice(0, 120) }); };
   document.querySelectorAll("video, audio").forEach((m) => {
     const tipo = m.tagName.toLowerCase();
+    const enlace = m.closest("a[href]");
+    if (enlace) anadir(tipo, enlace.href, document.title);
     if (m.currentSrc) anadir(tipo, m.currentSrc, document.title);
     m.querySelectorAll("source[src]").forEach((s) => anadir(tipo, s.src, document.title));
   });
-  document.querySelectorAll("img[src]").forEach((i) => { if ((i.naturalWidth || 0) >= 120) anadir("imagen", i.currentSrc || i.src, i.alt); });
+  document.querySelectorAll("img[src]").forEach((i) => { if ((i.naturalWidth || 0) >= 160) anadir("imagen", i.currentSrc || i.src, i.alt); });
   document.querySelectorAll("a[href]").forEach((a) => {
     if (/\.(mp4|webm|mkv|mov|mp3|m4a|flac|ogg|opus|wav|jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(a.pathname)) anadir("enlace", a.href, a.textContent.trim());
   });
   return [...vistos.values()];
 }
 
-const detectados = [];
+const GLIFO = { video: "▶", audio: "♪", imagen: "▣", enlace: "↗" };
 
-async function buscarEnPagina() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !esUrlWeb(tab.url)) { mostrarAviso("Abre una página web (http/https) para buscar recursos."); return; }
+async function buscarRecursos() {
+  const tab = estado.activa;
+  $("recursos-nota").textContent = "Buscando…";
+  estado.recursos = []; estado.marcados.clear();
+  if (!tab || !esUrlWeb(tab.url)) { $("recursos-nota").textContent = ""; pintarRecursos(); return; }
   try {
-    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: detectarEnPagina });
-    detectados.splice(0, detectados.length, ...(res.result || []));
-    pintarDetectados();
-    $("detectados-nota").textContent = detectados.length
-      ? `${detectados.length} recurso(s) encontrados. Elige cuáles añadir.`
-      : "No se encontró nada descargable. Prueba «Añadir esta página»: la aplicación intentará extraer el video desde ahí.";
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: false }, func: detectarEnPagina });
+    estado.recursos = res.result || [];
   } catch {
-    mostrarAviso("No se pudo leer esta página (el navegador no lo permite aquí).");
+    $("recursos-nota").textContent = "El navegador no permite leer esta página.";
+    return pintarRecursos();
+  }
+  $("recursos-nota").textContent = estado.recursos.length
+    ? "Marca lo que quieras. Los datos se leen aquí; la descarga la hace la aplicación."
+    : "No se encontró nada descargable directamente. Prueba «Descargar esta página»: la aplicación intentará extraer el video desde ahí.";
+  pintarRecursos();
+}
+
+function pintarRecursos() {
+  const ul = $("recursos");
+  ul.replaceChildren(...estado.recursos.map((r, i) => el("li", { clase: "item" },
+    el("label", {}, el("input", { type: "checkbox", checked: estado.marcados.has(i),
+      onchange: (e) => { e.target.checked ? estado.marcados.add(i) : estado.marcados.delete(i); actualizarBarraRecursos(); } }),
+    el("div", { clase: "miniatura" }, GLIFO[r.tipo] || "↗"),
+    el("div", { clase: "cuerpo" }, el("div", { clase: "titulo" }, r.nombre || r.url),
+      el("div", { clase: "meta" }, `${r.tipo} · ${nombreSitio(r.url)}`), el("div", { clase: "meta" }, r.url))))));
+  $("contador-recursos").hidden = !estado.recursos.length;
+  $("contador-recursos").textContent = estado.recursos.length;
+  actualizarBarraRecursos();
+}
+
+function actualizarBarraRecursos() {
+  $("barra-recursos").hidden = !estado.recursos.length;
+  const n = estado.marcados.size;
+  $("btn-descargar-sel").disabled = $("btn-enviar").disabled = !n;
+  $("btn-descargar-sel").textContent = n ? `Descargar seleccionados (${n})` : "Descargar seleccionados";
+  $("btn-marcar").textContent = n === estado.recursos.length ? "Quitar marcas" : "Marcar todos";
+}
+
+$("btn-buscar").addEventListener("click", buscarRecursos);
+$("btn-marcar").addEventListener("click", () => {
+  if (estado.marcados.size === estado.recursos.length) estado.marcados.clear();
+  else estado.recursos.forEach((_, i) => estado.marcados.add(i));
+  pintarRecursos();
+});
+
+async function enviarMarcados(accion) {
+  const origen = estado.activa && esUrlWeb(estado.activa.url) ? estado.activa.url : undefined;
+  let hechos = 0;
+  for (const i of [...estado.marcados]) {
+    const datos = { url: estado.recursos[i].url, origen };
+    if (accion === "encolar") datos.opciones = opcionesElegidas();
+    const r = await nativo(accion, datos);
+    if (!r.ok) { mostrarAviso(textoError(r.error)); break; }
+    hechos++;
+  }
+  if (hechos) {
+    mostrarAviso("");
+    estado.marcados.clear(); pintarRecursos();
+    cambiarPestana("cola");
   }
 }
+$("btn-descargar-sel").addEventListener("click", () => enviarMarcados("encolar"));
+$("btn-enviar").addEventListener("click", () => enviarMarcados("detectar"));
 
-function pintarDetectados() {
-  const ul = $("detectados");
-  ul.replaceChildren();
-  detectados.forEach((d, i) => {
-    const cb = el("input", { type: "checkbox", id: `d${i}`, checked: false });
-    ul.append(el("li", { clase: "item" }, el("label", {},
-      cb, el("div", {}, el("div", { clase: "titulo" }, d.nombre || d.url),
-        el("div", { clase: "meta" }, `${d.tipo} · ${nombreSitio(d.url)}`), el("div", { clase: "meta" }, d.url)))));
-  });
-  $("btn-anadir").disabled = !detectados.length;
-}
+$("btn-descargar-pagina").addEventListener("click", async () => {
+  const r = await nativo("encolar", { url: estado.activa.url, opciones: opcionesElegidas() });
+  if (r.ok) { mostrarAviso(""); cambiarPestana("cola"); } else mostrarAviso(textoError(r.error));
+});
 
-async function anadirSeleccionados() {
-  const marcados = detectados.filter((_, i) => $(`d${i}`).checked);
-  if (!marcados.length) { mostrarAviso("Marca al menos un recurso."); return; }
-  mostrarAviso("");
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  for (const m of marcados) {
-    const r = await nativo("encolar", { url: m.url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined, opciones: opcionesElegidas() });
-    if (!r.ok) { mostrarAviso(`${r.error.mensaje} ${r.error.solucion || ""}`); break; }
-  }
-  await refrescarCola();
-}
+// --- Análisis ----------------------------------------------------------------------------------------------
+$("btn-analizar").addEventListener("click", () => analizar(estado.activa.url));
 
-async function anadirPagina() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !esUrlWeb(tab.url)) { mostrarAviso("Esta pestaña no es una página web."); return; }
-  const r = await nativo("encolar", { url: tab.url, opciones: opcionesElegidas() });
-  mostrarAviso(r.ok ? "" : `${r.error.mensaje} ${r.error.solucion || ""}`);
-  await refrescarCola();
-}
+function chip(texto, clase = "") { return el("span", { clase: `chip ${clase}` }, texto); }
 
-// --- Análisis de un enlace ---------------------------------------------------
 async function analizar(url) {
-  const caja = $("analisis-cuerpo");
-  $("analisis").hidden = false;
-  caja.replaceChildren(el("p", { clase: "nota" }, `Analizando ${nombreSitio(url)}…`));
+  const caja = $("analisis");
+  caja.hidden = false;
+  caja.replaceChildren(el("div", { clase: "tarjeta" }, `Analizando ${nombreSitio(url)}…`));
   const r = await nativo("analizar", { url });
-  if (!r.ok) { caja.replaceChildren(el("p", { clase: "error-caja" }, `${r.error.mensaje} ${r.error.causa || ""} ${r.error.solucion || ""}`)); return; }
+  if (!r.ok) {
+    caja.replaceChildren(el("div", { clase: "tarjeta" }, el("div", { clase: "error-caja" }, textoError(r.error))));
+    return;
+  }
   const d = r.datos, dg = d.diagnostico;
   const alturas = [...new Set(d.formatos.map((f) => f.altura).filter(Boolean))].sort((a, b) => b - a);
   const subs = Object.entries(d.subtitulos || {}).map(([k, auto]) => k + (auto ? " (auto)" : ""));
-  const lineas = [
-    el("div", { clase: "titulo" }, d.titulo),
-    el("div", { clase: "meta" }, `${d.sitio}${d.autor ? " · " + d.autor : ""}${d.en_vivo ? " · en vivo" : ""}`),
-    el("div", { clase: "meta" }, `Calidades: ${alturas.length ? alturas.map((a) => a + "p").join(", ") : "no informadas"} · Subtítulos: ${subs.join(", ") || "ninguno"}`),
-    el("div", { clase: "meta" }, `Compatibilidad: ${dg.nivel.replaceAll("_", " ")} (${dg.motivo})`),
-  ];
-  for (const a of dg.alternativas || []) lineas.push(el("div", { clase: "meta" }, `Alternativa: ${a}`));
-  lineas.push(el("div", { clase: "acciones" },
-    el("button", { clase: "sec", textContent: "Cerrar", onclick: () => { $("analisis").hidden = true; } }),
-    el("button", { textContent: "Añadir a la cola", onclick: async () => {
-      const x = await nativo("encolar", { url, opciones: opcionesElegidas() });
-      mostrarAviso(x.ok ? "" : `${x.error.mensaje} ${x.error.solucion || ""}`);
-      $("analisis").hidden = x.ok; await refrescarCola();
-    } })));
-  caja.replaceChildren(el("div", { clase: "item" }, ...lineas));
+  const mayor = d.formatos.map((f) => f.tamano).filter(Boolean).sort((a, b) => b - a)[0];
+  const compat = { compatible: ["Compatible", "ok"], parcialmente_compatible: ["Compatible en parte", "aviso"], protegido: ["Protegido", "mal"], desconocido: ["Sin datos", ""] }[dg.nivel] || [dg.nivel, ""];
+  const mini = miniaturaSegura(d.miniatura);
+  caja.replaceChildren(el("div", { clase: "tarjeta" },
+    el("div", { clase: "item", style: "border:none;padding:0;box-shadow:none" },
+      el("div", { clase: "miniatura" }, mini ? el("img", { src: mini, referrerPolicy: "no-referrer", alt: "" }) : "▶"),
+      el("div", { clase: "cuerpo" }, el("div", { clase: "titulo" }, d.titulo),
+        el("div", { clase: "meta" }, [d.sitio, d.autor, formatearDuracion(d.duracion), d.en_vivo ? "en vivo" : ""].filter(Boolean).join(" · ")))),
+    el("div", { clase: "chips" }, chip(compat[0], compat[1]),
+      ...(alturas.length ? [chip(`hasta ${alturas[0]}p`)] : []), ...(subs.length ? [chip(`Subtítulos: ${subs.join(", ")}`)] : []),
+      ...(mayor ? [chip(`~${formatearTamano(mayor)}`)] : [])),
+    el("p", { clase: "ayuda" }, dg.motivo), ...(dg.alternativas || []).map((a) => el("p", { clase: "ayuda" }, `Alternativa: ${a}`)),
+    el("div", { clase: "acciones" },
+      el("button", { clase: "enlace", textContent: "Cerrar", onclick: () => { caja.hidden = true; } }),
+      el("button", { clase: "primario", textContent: "Descargar", disabled: dg.nivel === "protegido" && dg.confianza === "confirmado",
+        onclick: async () => {
+          const x = await nativo("encolar", { url, opciones: opcionesElegidas() });
+          if (x.ok) { caja.hidden = true; cambiarPestana("cola"); } else mostrarAviso(textoError(x.error));
+        } }))));
 }
 
-// --- Cola -----------------------------------------------------------------------
+// --- Cola ----------------------------------------------------------------------------------------------------------
 async function accionTarea(accion, id) {
   const r = await nativo(accion, { id });
-  if (!r.ok) mostrarAviso(`${r.error.mensaje} ${r.error.solucion || ""}`);
+  if (!r.ok) mostrarAviso(textoError(r.error)); else mostrarAviso("");
   await refrescarCola();
 }
 
-const ROTULO = { cancelar: "Cancelar", reintentar: "Reintentar", eliminar: "Eliminar", iniciar: "Descargar" };
+const ROTULO = { cancelar: "Cancelar", reintentar: "Reintentar", eliminar: "Eliminar", iniciar: "Descargar", abrir_carpeta: "Abrir carpeta" };
+
+function accionesDeTarea(t) {
+  const lista = accionesDisponibles(t.estado);
+  if (t.estado === "completado" && t.carpeta_final) lista.unshift("abrir_carpeta");
+  return lista;
+}
 
 function pintarTarea(t) {
-  const hijos = [
+  const mini = miniaturaSegura(t.miniatura);
+  const activa = t.estado === "descargando";
+  const detalles = [];
+  if (activa) detalles.push(t.progreso != null ? `${Math.round(t.progreso)} %` : "Iniciando…", formatearVelocidad(t.velocidad), t.eta != null ? `quedan ${formatearEta(t.eta)}` : "");
+  const cuerpo = [
     el("div", { clase: "titulo" }, t.titulo || t.url),
-    el("div", { clase: "meta" }, `${t.sitio || nombreSitio(t.url)} · ${t.url}`),
-    el("div", {}, el("span", { clase: `estado ${t.estado}` }, ETIQUETA_ESTADO[t.estado] || t.estado),
-      document.createTextNode(t.progreso != null && ESTADOS_ACTIVOS.includes(t.estado) ? ` ${Math.round(t.progreso)} %` : "")),
+    el("div", { clase: "meta" }, [t.sitio || nombreSitio(t.url), formatearDuracion(t.duracion)].filter(Boolean).join(" · ")),
+    el("div", { clase: "fila-estado" }, el("span", { clase: `etiqueta-estado ${t.estado}` }, ETIQUETA_ESTADO[t.estado] || t.estado),
+      el("span", { clase: "meta" }, detalles.filter(Boolean).join(" · "))),
   ];
-  if (t.progreso != null && ["descargando", "procesando"].includes(t.estado)) hijos.push(el("progress", { max: 100, value: t.progreso }));
-  for (const n of t.notas || []) hijos.push(el("div", { clase: "meta" }, n));
+  if (["descargando", "procesando"].includes(t.estado) && t.progreso != null) cuerpo.push(el("progress", { max: 100, value: t.progreso }));
+  if (t.estado === "procesando") cuerpo.push(el("div", { clase: "meta" }, "La aplicación está uniendo y convirtiendo los archivos…"));
+  for (const n of t.notas || []) cuerpo.push(el("div", { clase: "meta" }, n));
   if (t.error) {
-    hijos.push(el("div", { clase: "error-caja" }, t.error.mensaje,
-      ...(t.error.causa ? [el("div", {}, `Causa: ${t.error.causa}`)] : []),
-      ...(t.error.solucion ? [el("div", {}, `Qué hacer: ${t.error.solucion}`)] : [])));
+    cuerpo.push(el("div", { clase: "error-caja" }, t.error.mensaje,
+      el("div", {}, `Causa: ${t.error.causa || "no se pudo determinar"}`), ...(t.error.solucion ? [el("div", {}, `Qué hacer: ${t.error.solucion}`)] : [])));
   }
-  const botones = accionesDisponibles(t.estado).map((a) =>
-    el("button", { clase: a === "eliminar" || a === "cancelar" ? "sec" : "", textContent: ROTULO[a], onclick: () => accionTarea(a, t.id) }));
-  if (botones.length) hijos.push(el("div", { clase: "acciones" }, ...botones));
-  return el("li", { clase: "item" }, ...hijos);
+  const botones = accionesDeTarea(t).map((a) => el("button", {
+    clase: a === "iniciar" ? "primario" : a === "reintentar" ? "sec" : a === "eliminar" ? "peligro" : "",
+    textContent: ROTULO[a], onclick: () => accionTarea(a, t.id),
+  }));
+  if (botones.length) cuerpo.push(el("div", { clase: "acciones" }, ...botones));
+  return el("li", { clase: "item" },
+    el("div", { clase: "miniatura" }, mini ? el("img", { src: mini, referrerPolicy: "no-referrer", alt: "", loading: "lazy" }) : "▶"),
+    el("div", { clase: "cuerpo" }, ...cuerpo));
 }
 
 async function refrescarCola() {
-  const f = $("filtro").value;
-  const datos = { limite: 50 };
-  if (f === "activas") datos.estados = ESTADOS_ACTIVOS;
-  else if (f) datos.estados = [f];
-  const r = await nativo("listar", datos);
+  const r = await nativo("listar", { limite: 100 });
   const ul = $("cola");
   if (!r.ok) { ul.replaceChildren(el("li", { clase: "vacio" }, "No se puede mostrar la cola sin conexión.")); return; }
-  ul.replaceChildren(...(r.datos.tareas.length ? r.datos.tareas.map(pintarTarea) : [el("li", { clase: "vacio" }, "No hay descargas.")]));
-  const n = r.datos.tareas.filter((t) => ESTADOS_ACTIVOS.includes(t.estado)).length;
-  chrome.action.setBadgeText({ text: n && !f ? String(n) : "" });
+  estado.tareas = r.datos.tareas;
+  const activas = estado.tareas.filter((t) => ESTADOS_ACTIVOS.includes(t.estado));
+  $("contador-cola").hidden = !activas.length;
+  $("contador-cola").textContent = activas.length;
+  chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
+  chrome.action.setBadgeText({ text: activas.length ? String(activas.length) : "" });
+  if (estado.tab !== "cola") return;
+
+  const s = resumenCola(estado.tareas);
+  $("resumen").replaceChildren(
+    ...[[s.descargando, "descargando"], [s.enEspera, "en espera"], [s.detectados, "detectados"], [formatearVelocidad(s.velocidad) || "—", "velocidad"]]
+      .map(([n, txt]) => el("div", { clase: "dato" }, el("b", {}, String(n)), el("span", {}, txt))));
+  $("btn-iniciar-todos").hidden = !s.detectados;
+  const visibles = filtrarTareas(estado.tareas, estado.filtro, estado.busqueda);
+  ul.replaceChildren(...(visibles.length ? visibles.map(pintarTarea)
+    : [el("li", { clase: "vacio" }, estado.tareas.length ? "Nada coincide con el filtro." : "No hay descargas. Busca recursos en «Esta página» o usa el botón sobre los videos.")]));
 }
 
-// --- Arranque --------------------------------------------------------------------
-$("btn-detectar").addEventListener("click", buscarEnPagina);
-$("btn-anadir").addEventListener("click", anadirSeleccionados);
-$("btn-pagina").addEventListener("click", anadirPagina);
-$("btn-analizar-pagina").addEventListener("click", async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab && esUrlWeb(tab.url)) analizar(tab.url); else mostrarAviso("Esta pestaña no es una página web.");
+document.querySelectorAll("[data-filtro]").forEach((b) => b.addEventListener("click", () => {
+  estado.filtro = b.dataset.filtro;
+  document.querySelectorAll("[data-filtro]").forEach((x) => x.classList.toggle("activo", x === b));
+  refrescarCola();
+}));
+$("busqueda").addEventListener("input", (e) => { estado.busqueda = e.target.value; refrescarCola(); });
+$("btn-limpiar").addEventListener("click", async () => { await nativo("limpiar"); refrescarCola(); });
+$("btn-iniciar-todos").addEventListener("click", async () => {
+  for (const t of estado.tareas.filter((x) => x.estado === "detectado")) await nativo("iniciar", { id: t.id });
+  refrescarCola();
 });
-$("filtro").addEventListener("change", refrescarCola);
-$("btn-anadir").disabled = true;
 
-(async function iniciar() {
-  const { aviso, analizarUrl } = await chrome.storage.session.get(["aviso", "analizarUrl"]);
-  if (aviso) { mostrarAviso(aviso); await chrome.storage.session.remove("aviso"); }
-  await chrome.action.setBadgeText({ text: "" });
-  if (await comprobarConexion()) {
-    if (analizarUrl) { await chrome.storage.session.remove("analizarUrl"); analizar(analizarUrl); }
-    await refrescarCola();
-    setInterval(refrescarCola, 1500);
-  }
-})();
+// --- Ajustes -------------------------------------------------------------------------------------------------------
+async function cargarAjustes() {
+  const a = await chrome.storage.local.get(["botonFlotante", "modo", "altura"]);
+  $("aj-boton").checked = a.botonFlotante !== false;
+  $("aj-modo").value = a.modo || "video";
+  $("aj-altura").value = a.altura || "";
+  $("modo").value = a.modo || "video";
+  $("altura").value = a.altura || "";
+  $("aj-vinculo").textContent = `Esta extensión está vinculada como «${nombreNavegador(navigator.userAgent)}». ` +
+    "Puedes revocarla desde la aplicación (pestaña Extensión) o desvincularla aquí.";
+}
+
+$("aj-boton").addEventListener("change", (e) => chrome.storage.local.set({ botonFlotante: e.target.checked }));
+$("aj-modo").addEventListener("change", (e) => { chrome.storage.local.set({ modo: e.target.value }); $("modo").value = e.target.value; });
+$("aj-altura").addEventListener("change", (e) => { chrome.storage.local.set({ altura: e.target.value }); $("altura").value = e.target.value; });
+$("btn-desvincular").addEventListener("click", async () => {
+  const r = await nativo("desvincular");
+  if (!r.ok) { mostrarAviso(textoError(r.error)); return; }
+  await chrome.runtime.sendMessage({ tipo: "olvidar-token" });
+  iniciar();
+});
+
+iniciar();
