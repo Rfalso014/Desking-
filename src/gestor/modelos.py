@@ -51,6 +51,50 @@ class InfoContenido:
     subtitulos: dict[str, bool] = field(default_factory=dict)
 
 
+class EstadoTarea(str, Enum):
+    """Estados mínimos que pide el proyecto (se muestran igual en app y extensión)."""
+
+    DETECTADO = "detectado"
+    ANALIZANDO = "analizando"
+    PENDIENTE = "pendiente"
+    DESCARGANDO = "descargando"
+    PROCESANDO = "procesando"
+    COMPLETADO = "completado"
+    CANCELADO = "cancelado"
+    ERROR = "error"
+
+
+ESTADOS_ACTIVOS = (EstadoTarea.ANALIZANDO, EstadoTarea.DESCARGANDO, EstadoTarea.PROCESANDO)
+ESTADOS_FINALES = (EstadoTarea.COMPLETADO, EstadoTarea.CANCELADO, EstadoTarea.ERROR)
+
+
+@dataclass
+class Tarea:
+    id: str
+    url: str
+    estado: EstadoTarea = EstadoTarea.DETECTADO
+    origen: str | None = None            # página desde la que se envió
+    titulo: str | None = None
+    sitio: str | None = None
+    progreso: float | None = None
+    velocidad_bps: float | None = None
+    eta_seg: float | None = None
+    creado: str = ""
+    actualizado: str = ""
+    opciones: dict = field(default_factory=dict)   # elecciones del usuario para ESTA tarea
+    destino_manual: str | None = None
+    carpeta_final: str | None = None
+    archivos: list = field(default_factory=list)
+    error: dict | None = None
+    intentos: int = 0
+    notas: list = field(default_factory=list)      # p. ej. qué reglas se aplicaron
+
+    def a_dict(self) -> dict:
+        d = {k: getattr(self, k) for k in self.__dataclass_fields__}
+        d["estado"] = self.estado.value
+        return d
+
+
 class CodigoError(str, Enum):
     URL_INVALIDA = "url_invalida"
     SITIO_NO_COMPATIBLE = "sitio_no_compatible"

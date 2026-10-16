@@ -23,6 +23,7 @@ from .modelos import CodigoError, ErrorGestor, InfoContenido
 from .validacion import validar_url
 
 # --- Listas blancas: lo que NO está aquí se rechaza (seguridad) --------------
+MODOS = ("video", "audio", "subtitulos", "portada")
 CONTENEDORES_VIDEO = {"mp4", "mkv", "mejor"}
 FORMATOS_AUDIO = {"original", "mp3", "m4a", "flac", "ogg", "opus", "wav"}
 # Nombre que usa yt-dlp para cada códec de salida.
@@ -47,7 +48,7 @@ class RolArchivo(str, Enum):
 
 @dataclass(frozen=True)
 class OpcionesDescarga:
-    modo: str = "video"                       # "video" | "audio"
+    modo: str = "video"   # "video" | "audio" | "subtitulos" (solo subtítulos) | "portada" (solo portada)
     altura_max: int | None = None             # None = mejor calidad
     contenedor_video: str = "mp4"
     formato_audio: str = "mp3"
@@ -61,8 +62,10 @@ class OpcionesDescarga:
         def malo(msg: str) -> ErrorGestor:
             return ErrorGestor(CodigoError.CONFIGURACION, msg,
                                solucion="Revisa las opciones de descarga.")
-        if self.modo not in ("video", "audio"):
+        if self.modo not in MODOS:
             raise malo(f"Modo no válido: {self.modo!r}.")
+        if self.modo == "subtitulos" and not self.subtitulos:
+            raise malo("Para descargar solo subtítulos hay que elegir al menos un idioma.")
         if self.contenedor_video not in CONTENEDORES_VIDEO:
             raise malo(f"Contenedor de video no válido: {self.contenedor_video!r}.")
         if self.formato_audio not in FORMATOS_AUDIO:
@@ -112,7 +115,7 @@ def construir_selector(o: OpcionesDescarga) -> str:
         return "ba[ext=m4a]/ba/b" if o.formato_audio == "m4a" else "ba/b"
     if o.altura_max:
         h = o.altura_max
-        return f"bv*[height<={h}]+ba/b[height<={h}]"
+        return f"bv*[height<=?{h}]+ba/b[height<=?{h}]"
     return "bv*+ba/b"
 
 
@@ -136,7 +139,9 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
         p["ffmpeg_location"] = str(o.ffmpeg_dir)
     pp: list[dict[str, Any]] = p["postprocessors"]
 
-    if o.modo == "video":
+    if o.modo in ("subtitulos", "portada"):
+        p["skip_download"] = True      # no se baja el video: solo los extras
+    elif o.modo == "video":
         if o.contenedor_video != "mejor":
             p["merge_output_format"] = o.contenedor_video  # solo une pistas (sin recodificar)
     elif o.formato_audio != "original":
@@ -149,13 +154,15 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
         p.update(writesubtitles=True, writeautomaticsub=o.subtitulos_automaticos,
                  subtitleslangs=list(o.subtitulos), subtitlesformat="srt/best")
         pp.append({"key": "FFmpegSubtitlesConvertor", "format": "srt", "when": "before_dl"})
-    if o.portada:
+    if o.portada or o.modo == "portada":
         p["writethumbnail"] = True
         pp.append({"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"})
     return p
 
 
 def _necesita_ffmpeg(o: OpcionesDescarga) -> bool:
+    if o.modo in ("subtitulos", "portada"):
+        return True      # la conversión de subtítulos/portada usa FFmpeg
     solo_pista_original = o.modo == "audio" and o.formato_audio == "original" and not o.subtitulos and not o.portada
     return not solo_pista_original
 
@@ -222,7 +229,14 @@ def descargar(url: str, opciones: OpcionesDescarga, carpeta_trabajo: Path, *,
         raise traducir_excepcion(exc) from exc
 
     archivos = _clasificar(carpeta_trabajo, opciones.modo)
-    if not any(a.rol in (RolArchivo.VIDEO, RolArchivo.AUDIO) for a in archivos):
+    roles = {a.rol for a in archivos}
+    if opciones.modo == "subtitulos" and RolArchivo.SUBTITULO not in roles:
+        raise ErrorGestor(CodigoError.SUBTITULOS_INEXISTENTES, "No hay subtítulos en los idiomas pedidos.",
+                          causa="El sitio no ofrece subtítulos (manuales ni automáticos) en ese idioma.",
+                          solucion="Prueba con otro idioma, o desactiva los subtítulos automáticos si el problema es su calidad.")
+    if opciones.modo == "portada" and RolArchivo.PORTADA not in roles:
+        raise ErrorGestor(CodigoError.PROCESAMIENTO, "El sitio no ofrece portada para este contenido.")
+    if opciones.modo in ("video", "audio") and not roles & {RolArchivo.VIDEO, RolArchivo.AUDIO}:
         raise ErrorGestor(CodigoError.PROCESAMIENTO, "La descarga terminó sin producir un archivo.",
                           causa=None, solucion="Reintenta la descarga.")
     if progreso:

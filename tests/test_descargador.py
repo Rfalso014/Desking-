@@ -16,7 +16,7 @@ OP = OpcionesDescarga(ffmpeg_dir=FFMPEG_DIR, portada=False)
 # --- puras ------------------------------------------------------------------
 @pytest.mark.parametrize("opc, esperado", [
     (OpcionesDescarga(), "bv*+ba/b"),
-    (OpcionesDescarga(altura_max=720), "bv*[height<=720]+ba/b[height<=720]"),
+    (OpcionesDescarga(altura_max=720), "bv*[height<=?720]+ba/b[height<=?720]"),
     (OpcionesDescarga(modo="audio", formato_audio="mp3"), "ba/b"),
     (OpcionesDescarga(modo="audio", formato_audio="m4a"), "ba[ext=m4a]/ba/b"),
 ])
