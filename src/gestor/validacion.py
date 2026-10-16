@@ -10,6 +10,7 @@ dominio público podría apuntar a una IP privada vía DNS; eso se cubrirá en l
 Fase 13 (pruebas y seguridad integrales).
 """
 import ipaddress
+import socket
 from urllib.parse import urlsplit
 
 from .modelos import CodigoError, ErrorGestor
@@ -58,6 +59,34 @@ def validar_url(url: str, *, permitir_interno: bool = False) -> str:
     if not permitir_interno and _es_destino_interno(host):
         raise _invalida("No se admiten direcciones locales ni de red privada.")
     return url
+
+
+def verificar_resolucion(url: str) -> None:
+    """Resuelve el dominio y rechaza la URL si apunta a una dirección local o privada.
+
+    Cubre el caso de un dominio público cuyo DNS apunta a 127.0.0.1 o a la red
+    interna. Si el dominio no se puede resolver NO es un error de seguridad:
+    se deja que la descarga falle luego con un error de conexión normal.
+    Limitación: entre esta comprobación y la descarga el DNS podría cambiar
+    (DNS rebinding); reduce el riesgo, no lo elimina.
+    """
+    host = urlsplit(url).hostname or ""
+    try:
+        ipaddress.ip_address(host)
+        return                       # ya es una IP: validar_url la revisó
+    except ValueError:
+        pass
+    try:
+        direcciones = {r[4][0] for r in socket.getaddrinfo(host, None)}
+    except socket.gaierror:
+        return
+    for d in direcciones:
+        try:
+            ip = ipaddress.ip_address(d.split("%")[0])
+        except ValueError:
+            continue
+        if not ip.is_global:
+            raise _invalida("El dominio apunta a una dirección local o de red privada.")
 
 
 def _invalida(mensaje: str) -> ErrorGestor:

@@ -16,10 +16,10 @@ from .db import BaseDatos
 from .descargador import Progreso, descargar, limpiar_carpeta_trabajo
 from .errores import traducir_excepcion
 from .extractor import obtener_info
-from .modelos import (ESTADOS_ACTIVOS, ESTADOS_FINALES, CodigoError, ErrorGestor, EstadoTarea, InfoContenido,
+from .modelos import (ESTADOS_ACTIVOS, CodigoError, ErrorGestor, EstadoTarea, InfoContenido,
                       Tarea)
 from .organizador import organizar
-from .validacion import validar_url
+from .validacion import validar_url, verificar_resolucion
 
 _INTERVALO_PROGRESO = 0.5   # segundos mínimos entre escrituras de progreso a la base de datos
 
@@ -147,6 +147,8 @@ class GestorCola:
     def analizar(self, url: str) -> dict:
         """Consulta una URL (sin crear tarea) y devuelve info + diagnóstico de compatibilidad."""
         try:
+            if not self._permitir_interno:
+                verificar_resolucion(validar_url(url))
             info = self._extraer(url, permitir_interno=self._permitir_interno)
         except ErrorGestor as e:
             e = drm.enriquecer_error(url, e)
@@ -223,6 +225,8 @@ class GestorCola:
         try:
             t.estado, t.error = EstadoTarea.ANALIZANDO, None
             self._publicar(t)
+            if not self._permitir_interno:
+                verificar_resolucion(t.url)
             info = self._extraer(t.url, permitir_interno=self._permitir_interno)
             t.titulo, t.sitio = info.titulo, info.sitio
 
