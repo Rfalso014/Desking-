@@ -5,12 +5,15 @@ los valores por defecto, más la búsqueda de FFmpeg.
 """
 import os
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .nativo.comun import carpeta_datos as _carpeta_datos
 
-RAIZ_PROYECTO = Path(__file__).resolve().parents[2]
+EMPAQUETADO = bool(getattr(sys, "frozen", False))     # True dentro del .exe creado con PyInstaller
+# Raíz de la instalación: la carpeta del .exe, o la raíz del repositorio en desarrollo.
+RAIZ_PROYECTO = Path(sys.executable).parent if EMPAQUETADO else Path(__file__).resolve().parents[2]
 
 
 carpeta_datos = _carpeta_datos  # misma función que usa el host nativo

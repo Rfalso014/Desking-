@@ -13,3 +13,6 @@ cookies*.txt
 
 tools/
 descargas_prueba/
+
+GestorDescargas.spec
+GestorHost.spec

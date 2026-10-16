@@ -94,6 +94,10 @@ def descargar_imagen(url: str, carpeta: Path, *, permitir_interno: bool = False,
 
 def construir_comando_galeria(url: str, carpeta: Path) -> list[str]:
     """Lista de argumentos para gallery-dl (nunca un texto de shell)."""
+    if getattr(sys, "frozen", False):
+        raise ErrorGestor(CodigoError.CONFIGURACION, "Las galerías no están disponibles en la versión empaquetada.",
+                          causa="gallery-dl se ejecuta con Python, que no se incluye en el instalador.",
+                          solucion="Usa la versión de desarrollo (con Python) para descargar galerías.")
     url = validar_url(url, permitir_interno=True)   # solo esquema y formato; el host lo valida quien llama
     return [sys.executable, "-m", "gallery_dl", "--quiet", "--directory", str(carpeta),
             "--filename", "{filename}.{extension}", url]

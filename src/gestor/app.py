@@ -17,7 +17,28 @@ def crear_nucleo(ruta_db=None) -> tuple[BaseDatos, GestorCola]:
     return db, cola
 
 
+def _comandos_instalacion() -> int | None:
+    """Opciones de línea de comandos para registrar/quitar la conexión con el navegador."""
+    from .nativo import instalador
+    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if arg == "--instalar-host":
+        r = instalador.instalar()
+        print("Conexión instalada. ID de la extensión:", r["extension_id"])
+    elif arg == "--desinstalar-host":
+        instalador.desinstalar()
+        print("Conexión desinstalada.")
+    elif arg == "--estado-host":
+        for base, ruta in instalador.estado().items():
+            print(f"{base}: {ruta or 'NO registrado'}")
+    else:
+        return None
+    return 0
+
+
 def main() -> int:
+    codigo_cli = _comandos_instalacion()
+    if codigo_cli is not None:
+        return codigo_cli
     from PySide6.QtWidgets import QApplication, QMessageBox
     from .ui.ventana import VentanaPrincipal
 

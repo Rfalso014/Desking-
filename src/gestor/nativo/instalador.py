@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from ..config import RAIZ_PROYECTO
+from ..config import EMPAQUETADO, RAIZ_PROYECTO
 from .comun import NOMBRE_HOST, carpeta_datos
 
 BASES_REGISTRO = (r"Software\Google\Chrome\NativeMessagingHosts",
@@ -47,10 +47,15 @@ def instalar(extension_id: str | None = None, *, python: str | None = None, proy
     ext_id = extension_id or id_extension()
     origen = f"chrome-extension://{ext_id}/"
 
-    lanzador = carpeta / "host.bat"
-    # PYTHONPATH apunta al código; los argumentos del navegador (%*) se pasan al host.
-    lanzador.write_text(f'@echo off\r\nset "PYTHONPATH={proyecto / "src"}"\r\n"{python}" -m gestor.nativo.host %*\r\n',
-                        encoding="utf-8")
+    if EMPAQUETADO:      # versión instalada: el host es un .exe junto a la app
+        lanzador = proyecto / "GestorHost.exe"
+        comando_app = [str(proyecto / "GestorDescargas.exe")]
+    else:
+        lanzador = carpeta / "host.bat"
+        # PYTHONPATH apunta al código; los argumentos del navegador (%*) se pasan al host.
+        lanzador.write_text(f'@echo off\r\nset "PYTHONPATH={proyecto / "src"}"\r\n"{python}" -m gestor.nativo.host %*\r\n',
+                            encoding="utf-8")
+        comando_app = [_pythonw(python), "-m", "gestor.app"]
     manifiesto = carpeta / f"{NOMBRE_HOST}.json"
     manifiesto.write_text(json.dumps({
         "name": NOMBRE_HOST,
@@ -58,7 +63,7 @@ def instalar(extension_id: str | None = None, *, python: str | None = None, proy
         "path": str(lanzador), "type": "stdio", "allowed_origins": [origen]}, indent=2), encoding="utf-8")
     (datos or carpeta_datos()).joinpath("host.json").write_text(json.dumps({
         "origenes_permitidos": [origen],
-        "comando_app": [_pythonw(python), "-m", "gestor.app"]}, indent=2), encoding="utf-8")
+        "comando_app": comando_app}, indent=2), encoding="utf-8")
 
     for base in bases:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"{base}\{NOMBRE_HOST}") as k:

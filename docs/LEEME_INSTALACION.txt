@@ -1,0 +1,23 @@
+GESTOR DE DESCARGAS - Instalación (Windows)
+===========================================
+
+1. Descomprime esta carpeta donde quieras (por ejemplo C:\Gestor). No la muevas después de instalar.
+
+2. Abre GestorDescargas.exe.
+   - Pestaña Configuración > "Instalar conexión con el navegador".
+     (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host )
+
+3. En Chrome o Edge: abre chrome://extensions (o edge://extensions), activa "Modo desarrollador",
+   pulsa "Cargar descomprimida" y elige la carpeta "extension" de esta instalación.
+   El ID de la extensión es fijo y es el único autorizado por la conexión.
+
+4. Prueba: clic derecho sobre un enlace > "Añadir a la cola de descargas".
+
+Notas
+- FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).
+- Para YouTube y otros sitios puede hacer falta un entorno JavaScript externo (Deno) que NO se incluye:
+  instálalo desde https://deno.com si yt-dlp lo pide.
+- Las galerías de imágenes (gallery-dl) solo funcionan en la versión de desarrollo con Python.
+- Desinstalar: GestorDescargas.exe --desinstalar-host, y borra la carpeta.
+- Actualizar yt-dlp: los sitios cambian a menudo. En la versión con Python: scripts\actualizar_ytdlp.py.
+  En la versión empaquetada hay que descargar una versión nueva del programa.
