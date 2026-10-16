@@ -57,3 +57,7 @@
 - Sin firma de código: Windows SmartScreen/antivirus pueden advertir sobre los .exe.
 - Actualizaciones: manuales (`scripts/actualizar_ytdlp.py` en desarrollo; versión nueva del zip en la empaquetada).
 - Sin instalador (Inno Setup/MSI): se distribuye un zip con `--instalar-host`.
+
+## Trampa encontrada (2026-10-16)
+- El Python de la Microsoft Store redirige las escrituras en %LOCALAPPDATA% a una carpeta oculta (LocalCache). Chrome no veia el manifiesto del host. Los datos de la app ahora viven en %USERPROFILE%\.gestor-descargas.
+- Verificado por el usuario: la extension en Chrome muestra Conectado.

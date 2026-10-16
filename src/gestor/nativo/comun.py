@@ -10,8 +10,9 @@ NOMBRE_HOST = "com.gestor.descargas"
 
 
 def carpeta_datos() -> Path:
-    base = Path(os.environ.get("GESTOR_DATOS") or
-                (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "GestorDescargas"))
+    # OJO: no usar %LOCALAPPDATA%. El Python de la Microsoft Store redirige lo que se escribe allí a una
+    # carpeta oculta, y Chrome (que no es Python de la Store) no vería los archivos del host.
+    base = Path(os.environ.get("GESTOR_DATOS") or (Path.home() / ".gestor-descargas"))
     base.mkdir(parents=True, exist_ok=True)
     return base
 
