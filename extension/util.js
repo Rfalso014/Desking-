@@ -28,6 +28,17 @@ export function elegirUrlParaMenu(info, tab) {
   return null;
 }
 
+/**
+ * Decide qué URL enviar cuando el botón flotante se pulsa sobre un <video>.
+ * Prioridad: enlace que envuelve al video (miniaturas de YouTube, etc.) > fuente directa (no blob:) > página.
+ */
+export function elegirUrlParaVideo(c) {
+  for (const u of [c && c.enlace, c && c.fuente, c && c.pagina]) {
+    if (u && esUrlWeb(u)) return u;
+  }
+  return null;
+}
+
 /** Traduce los errores crudos de Chrome (connectNative) a mensajes comprensibles. */
 export function mensajeErrorNativo(texto) {
   const t = String(texto || "");

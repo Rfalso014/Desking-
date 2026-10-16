@@ -178,6 +178,10 @@ async function refrescarCola() {
 $("btn-detectar").addEventListener("click", buscarEnPagina);
 $("btn-anadir").addEventListener("click", anadirSeleccionados);
 $("btn-pagina").addEventListener("click", anadirPagina);
+$("btn-analizar-pagina").addEventListener("click", async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && esUrlWeb(tab.url)) analizar(tab.url); else mostrarAviso("Esta pestaña no es una página web.");
+});
 $("filtro").addEventListener("change", refrescarCola);
 $("btn-anadir").disabled = true;
 

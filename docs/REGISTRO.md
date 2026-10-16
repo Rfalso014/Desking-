@@ -61,3 +61,8 @@
 ## Trampa encontrada (2026-10-16)
 - El Python de la Microsoft Store redirige las escrituras en %LOCALAPPDATA% a una carpeta oculta (LocalCache). Chrome no veia el manifiesto del host. Los datos de la app ahora viven en %USERPROFILE%\.gestor-descargas.
 - Verificado por el usuario: la extension en Chrome muestra Conectado.
+
+## Boton flotante sobre videos (2026-10-16)
+- content.js: boton al pasar el cursor sobre un <video> (>=200x110) con 'Descargar' y 'solo audio'. Verificado en un navegador con una pagina local y chrome.runtime simulado (aparece aunque haya una capa encima, usa el enlace que envuelve al video, no aparece en videos pequenos, se oculta al salir).
+- Coste de privacidad: la extension ahora corre en todas las paginas http/https (aviso de Chrome 'leer y cambiar datos en todos los sitios'). El script solo lee el DOM localmente y envia algo unicamente tras un clic de confianza (isTrusted).
+- El menu contextual quedo con un solo elemento para que no sea submenu.

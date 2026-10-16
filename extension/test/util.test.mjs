@@ -1,7 +1,7 @@
 // Ejecutar: node --test extension/test
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accionesDisponibles, elegirUrlParaMenu, esUrlWeb, formatearTamano, mensajeErrorNativo, nombreSitio } from "../util.js";
+import { accionesDisponibles, elegirUrlParaMenu, elegirUrlParaVideo, esUrlWeb, formatearTamano, mensajeErrorNativo, nombreSitio } from "../util.js";
 
 test("solo http/https son URLs web", () => {
   assert.equal(esUrlWeb("https://a.com/x"), true);
@@ -23,6 +23,15 @@ test("fuente blob: cae a la página", () => {
 
 test("sin nada válido devuelve null", () => {
   assert.equal(elegirUrlParaMenu({ srcUrl: "blob:x", pageUrl: "chrome://extensions" }, { url: "about:blank" }), null);
+});
+
+test("video: prioriza el enlace que lo envuelve, luego la fuente directa, luego la página", () => {
+  const pagina = "https://youtube.com/";
+  assert.equal(elegirUrlParaVideo({ enlace: "https://youtube.com/watch?v=1", fuente: null, pagina }), "https://youtube.com/watch?v=1");
+  assert.equal(elegirUrlParaVideo({ enlace: null, fuente: "https://cdn.a.com/v.mp4", pagina }), "https://cdn.a.com/v.mp4");
+  assert.equal(elegirUrlParaVideo({ enlace: null, fuente: null, pagina }), pagina);
+  assert.equal(elegirUrlParaVideo({ enlace: "javascript:x", fuente: "blob:https://a.com/1", pagina: "about:blank" }), null);
+  assert.equal(elegirUrlParaVideo(null), null);
 });
 
 test("errores nativos se traducen", () => {

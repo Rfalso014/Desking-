@@ -19,7 +19,10 @@ def test_manifest_de_la_extension():
     assert m["manifest_version"] == 3
     # Permisos mínimos: nada de acceso a todos los sitios.
     assert set(m["permissions"]) == {"contextMenus", "nativeMessaging", "storage", "activeTab", "scripting"}
-    assert "host_permissions" not in m and "content_scripts" not in m
+    assert "host_permissions" not in m
+    # El botón flotante necesita un content script en las páginas web (solo http/https; nunca file:// ni chrome://).
+    cs = m["content_scripts"]
+    assert len(cs) == 1 and cs[0]["js"] == ["content.js"] and set(cs[0]["matches"]) == {"http://*/*", "https://*/*"}
     for ruta in [m["background"]["service_worker"], m["action"]["default_popup"], *m["icons"].values()]:
         assert (EXT / ruta).exists(), ruta
 
@@ -30,9 +33,16 @@ def test_id_estable_y_con_formato_de_chrome():
     assert i == instalador.id_extension()
 
 
+def test_content_script_es_seguro():
+    c = (EXT / "content.js").read_text(encoding="utf-8")
+    assert "isTrusted" in c                 # ignora clics falsos de la página
+    assert 'mode: "closed"' in c            # la página no puede manipular el botón
+    assert "import " not in c and "export " not in c    # los content scripts clásicos no usan módulos
+
+
 def test_popup_no_usa_innerhtml():
     # Regla de seguridad: el texto de páginas externas se inserta solo con textContent.
-    for f in ("popup.js", "background.js", "util.js"):
+    for f in ("popup.js", "background.js", "util.js", "content.js"):
         codigo = (EXT / f).read_text(encoding="utf-8")
         assert "innerHTML" not in codigo and "eval(" not in codigo, f
 

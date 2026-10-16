@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Gestor de Descargas",
   "version": "0.1.0",
-  "description": "Envía videos, audios, imágenes y enlaces a la aplicación Gestor de Descargas.",
+  "description": "Botón de descarga sobre los videos y menú contextual: envía el contenido a la aplicación Gestor de Descargas.",
   "minimum_chrome_version": "116",
   "permissions": [
     "contextMenus",
@@ -29,5 +29,18 @@
     "48": "icons/48.png",
     "128": "icons/128.png"
   },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyBVjZ5e0vW6/f7M/3psYuFGMbwjU3MvZ1aCYNUjzFdVBx5qZUnHupva/zb6eqfW9OxBrHlNpIX2rdhsyokX4P+GxhabmuGkm1q+AphDF/Bv0eNebtKvON3jrDzSFz2PGQ7EfV0b9M9lmv63kEfWZsfPf7BV26IMQhmGv0RHPBus6wttFituls/dJXEoUUlkQaE38HKX63toL3ynrFjSYyn0ljUiUVQwRmOwgY4HDAwiNdnLsBrv6stXM/b0E3v6nqJYvKOakUZGkl161fyT2cPGL8TVWb724l0nyZaTEKRI43zXD9WAFGwKJNvIWJrQVHGsm6Jd5XMVScjEQr+8UlwIDAQAB"
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyBVjZ5e0vW6/f7M/3psYuFGMbwjU3MvZ1aCYNUjzFdVBx5qZUnHupva/zb6eqfW9OxBrHlNpIX2rdhsyokX4P+GxhabmuGkm1q+AphDF/Bv0eNebtKvON3jrDzSFz2PGQ7EfV0b9M9lmv63kEfWZsfPf7BV26IMQhmGv0RHPBus6wttFituls/dJXEoUUlkQaE38HKX63toL3ynrFjSYyn0ljUiUVQwRmOwgY4HDAwiNdnLsBrv6stXM/b0E3v6nqJYvKOakUZGkl161fyT2cPGL8TVWb724l0nyZaTEKRI43zXD9WAFGwKJNvIWJrQVHGsm6Jd5XMVScjEQr+8UlwIDAQAB",
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
 }

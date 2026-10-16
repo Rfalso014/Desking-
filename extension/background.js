@@ -1,6 +1,6 @@
 // Service worker: menú contextual y puente con la aplicación (Native Messaging).
 // La extensión NO descarga nada: delega todo en la aplicación de escritorio.
-import { NOMBRE_HOST, elegirUrlParaMenu, esUrlWeb, mensajeErrorNativo, ESTADOS_ACTIVOS } from "./util.js";
+import { NOMBRE_HOST, elegirUrlParaMenu, elegirUrlParaVideo, esUrlWeb, mensajeErrorNativo, ESTADOS_ACTIVOS } from "./util.js";
 
 const TIEMPO_ESPERA_MS = 20000;
 let puerto = null;
@@ -58,9 +58,9 @@ export function enviar(accion, datos = {}) {
 }
 
 // --- Menú contextual --------------------------------------------------------
+// Un solo elemento: así Chrome lo muestra directamente en el menú, sin submenú.
 const MENU = [
-  { id: "encolar", title: "Añadir a la cola de descargas", contexts: ["link", "video", "audio", "image", "page"] },
-  { id: "analizar", title: "Analizar enlace…", contexts: ["link", "video", "audio", "image", "page"] },
+  { id: "encolar", title: "Descargar con Gestor de Descargas", contexts: ["link", "video", "audio", "image"] },
 ];
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -81,19 +81,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     await avisar("Este elemento no tiene una dirección que se pueda descargar.");
     return;
   }
-  if (info.menuItemId === "encolar") {
-    const r = await enviar("encolar", { url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined });
-    if (!r.ok) await avisar((r.error && r.error.mensaje) || "No se pudo añadir a la cola.");
-    else await actualizarInsignia();
-  } else if (info.menuItemId === "analizar") {
-    await chrome.storage.session.set({ analizarUrl: url });
-    try {
-      await chrome.action.openPopup();
-    } catch {
-      await chrome.action.setBadgeBackgroundColor({ color: "#1a73e8" });
-      await chrome.action.setBadgeText({ text: "1" }); // el usuario abre el popup con un clic
-    }
-  }
+  const r = await enviar("encolar", { url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined });
+  if (!r.ok) await avisar((r.error && r.error.mensaje) || "No se pudo añadir a la cola.");
+  else await actualizarInsignia();
 });
 
 // --- Insignia con el número de descargas activas ----------------------------
@@ -106,7 +96,21 @@ async function actualizarInsignia() {
 
 // --- Mensajes del popup -----------------------------------------------------
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
-  if (sender.id !== chrome.runtime.id || !msg || msg.tipo !== "nativo") return false;
-  enviar(msg.accion, msg.datos).then(responder);
-  return true; // respuesta asíncrona
+  if (sender.id !== chrome.runtime.id || !msg) return false;
+  if (msg.tipo === "nativo") {
+    enviar(msg.accion, msg.datos).then(responder);
+    return true; // respuesta asíncrona
+  }
+  if (msg.tipo === "encolar-pagina") {      // botón flotante sobre un video (content.js)
+    const url = elegirUrlParaVideo(msg.candidatas);
+    if (!url) {
+      responder(fallo({ codigo: "url_invalida", mensaje: "Este video no tiene una dirección descargable." }));
+      return false;
+    }
+    const modo = msg.modo === "audio" ? "audio" : "video";   // lista blanca: lo demás se ignora
+    const origen = sender.tab && esUrlWeb(sender.tab.url) ? sender.tab.url : undefined;
+    enviar("encolar", { url, origen, opciones: { modo } }).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
+    return true;
+  }
+  return false;
 });
