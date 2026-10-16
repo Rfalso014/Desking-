@@ -8,15 +8,12 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .nativo.comun import carpeta_datos as _carpeta_datos
+
 RAIZ_PROYECTO = Path(__file__).resolve().parents[2]
 
 
-def carpeta_datos() -> Path:
-    """Carpeta de datos de la app (base de datos, clave IPC). Se crea si falta."""
-    base = Path(os.environ.get("GESTOR_DATOS") or
-                (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "GestorDescargas"))
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+carpeta_datos = _carpeta_datos  # misma función que usa el host nativo
 
 
 def localizar_ffmpeg() -> Path | None:

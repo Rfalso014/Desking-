@@ -17,19 +17,16 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import DownloadCancelled
 
+from .catalogo import CONTENEDORES_VIDEO, FORMATOS_AUDIO, MODOS, _IDIOMA
 from .errores import traducir_excepcion
 from .extractor import normalizar_info
 from .modelos import CodigoError, ErrorGestor, InfoContenido
 from .validacion import validar_url
 
 # --- Listas blancas: lo que NO está aquí se rechaza (seguridad) --------------
-MODOS = ("video", "audio", "subtitulos", "portada")
-CONTENEDORES_VIDEO = {"mp4", "mkv", "mejor"}
-FORMATOS_AUDIO = {"original", "mp3", "m4a", "flac", "ogg", "opus", "wav"}
 # Nombre que usa yt-dlp para cada códec de salida.
 _CODEC_YTDLP = {"mp3": "mp3", "m4a": "m4a", "flac": "flac", "ogg": "vorbis", "opus": "opus", "wav": "wav"}
 _SIN_CALIDAD = {"flac", "wav"}  # formatos sin pérdida: no llevan bitrate
-_IDIOMA = re.compile(r"^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$")
 _EXT_SUBS = {".srt", ".vtt", ".ass", ".lrc"}
 _EXT_IMAGEN = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _EXT_TEMPORALES = {".part", ".ytdl", ".temp", ".tmp"}

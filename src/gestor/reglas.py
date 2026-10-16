@@ -14,29 +14,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import Preferencias
-from .descargador import CONTENEDORES_VIDEO, FORMATOS_AUDIO, MODOS, OpcionesDescarga
+from .catalogo import CAMPOS_ACCION
+from .descargador import OpcionesDescarga
 from .modelos import CodigoError, ErrorGestor
 
-# Campos que una regla (o una tarea) puede cambiar, con su validador.
-_IDIOMA = re.compile(r"^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$")
-
-
-def _ok_altura(v): return v is None or (isinstance(v, int) and not isinstance(v, bool) and 100 <= v <= 8640)
-def _ok_idiomas(v): return isinstance(v, (list, tuple)) and len(v) <= 20 and all(isinstance(i, str) and _IDIOMA.match(i) for i in v)
-def _ok_bool(v): return isinstance(v, bool)
-def _ok_subcarpeta(v): return v is None or (isinstance(v, str) and 0 < len(v) <= 80)
-
-
-CAMPOS_ACCION = {
-    "modo": lambda v: v in MODOS,
-    "altura_max": _ok_altura,
-    "contenedor_video": lambda v: v in CONTENEDORES_VIDEO,
-    "formato_audio": lambda v: v in FORMATOS_AUDIO,
-    "subtitulos": _ok_idiomas,
-    "portada": _ok_bool,
-    "subcarpeta": _ok_subcarpeta,
-    "excluir": _ok_bool,
-}
 CAMPOS_CONDICION = ("dominio", "url_contiene", "sitio")
 
 

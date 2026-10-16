@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestor de Descargas</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Gestor de Descargas</h1>
+    <span id="conexion" class="chip" role="status">Conectando…</span>
+  </header>
+
+  <div id="aviso" class="aviso" hidden></div>
+
+  <section id="analisis" hidden aria-live="polite">
+    <h2>Análisis</h2>
+    <div id="analisis-cuerpo"></div>
+  </section>
+
+  <section>
+    <div class="fila-titulo">
+      <h2>Recursos detectados</h2>
+      <button id="btn-detectar" class="sec">Buscar en esta página</button>
+    </div>
+    <p id="detectados-nota" class="nota">Pulsa «Buscar en esta página» para listar videos, audios, imágenes y enlaces.
+      Algunos reproductores no muestran la dirección real del video: en ese caso usa «Añadir esta página».</p>
+    <ul id="detectados" class="lista"></ul>
+    <div class="opciones">
+      <label>Qué descargar
+        <select id="modo">
+          <option value="video">Video</option>
+          <option value="audio">Solo audio</option>
+          <option value="subtitulos">Solo subtítulos</option>
+          <option value="portada">Solo portada</option>
+        </select>
+      </label>
+      <label>Calidad máx.
+        <select id="altura">
+          <option value="">Mejor</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+        </select>
+      </label>
+    </div>
+    <div class="botones">
+      <button id="btn-pagina" class="sec">Añadir esta página</button>
+      <button id="btn-anadir">Añadir seleccionados</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="fila-titulo">
+      <h2>Cola</h2>
+      <select id="filtro" aria-label="Filtrar por estado">
+        <option value="">Todas</option>
+        <option value="activas">Activas</option>
+        <option value="error">Con error</option>
+        <option value="completado">Completadas</option>
+      </select>
+    </div>
+    <ul id="cola" class="lista"></ul>
+  </section>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
