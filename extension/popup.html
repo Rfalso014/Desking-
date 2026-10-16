@@ -50,18 +50,8 @@
     <section id="pestana-pagina" role="tabpanel">
       <div class="tarjeta compacta">
         <div class="pagina-info"><div id="pagina-titulo" class="titulo">—</div><div id="pagina-sitio" class="meta"></div></div>
-        <div class="opciones">
-          <label>Qué descargar
-            <select id="modo">
-              <option value="video">Video</option><option value="audio">Solo audio</option>
-              <option value="subtitulos">Solo subtítulos</option><option value="portada">Solo portada</option>
-            </select></label>
-          <label>Calidad máxima
-            <select id="altura">
-              <option value="">La de mi configuración</option><option value="mejor">La mejor</option>
-              <option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option>
-            </select></label>
-        </div>
+        <div class="etiqueta">¿Qué quieres descargar?</div>
+        <div id="selector-pagina" class="selector"></div>
         <div class="acciones">
           <button id="btn-analizar" class="sec">Analizar</button>
           <button id="btn-descargar-pagina" class="primario">Descargar esta página</button>
@@ -109,13 +99,9 @@
         <p class="ayuda">El botón «＋ Añadir» solo agrega el video a tu lista (pestaña Cola, estado «Detectado»). No se descarga nada hasta que pulses «Descargar».</p>
       </div>
       <div class="tarjeta">
-        <h2>Valores por defecto</h2>
-        <p class="ayuda">Se usan en el botón flotante y como valor inicial en esta ventana.</p>
-        <div class="opciones">
-          <label>Qué descargar<select id="aj-modo"><option value="video">Video</option><option value="audio">Solo audio</option></select></label>
-          <label>Calidad máxima<select id="aj-altura"><option value="">La de mi configuración</option><option value="mejor">La mejor</option>
-            <option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
-        </div>
+        <h2>Qué descargar por defecto</h2>
+        <p class="ayuda">Se usa con el botón «＋ Añadir» sobre los videos y con el clic derecho. Siempre podrás cambiarlo antes de descargar.</p>
+        <div id="selector-ajustes" class="selector"></div>
       </div>
       <div class="tarjeta">
         <h2>Vinculación</h2>

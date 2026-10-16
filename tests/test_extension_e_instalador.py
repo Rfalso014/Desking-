@@ -101,10 +101,13 @@ def test_el_boton_flotante_y_el_menu_no_descargan_solo_anaden_a_la_lista():
     """Regla de producto: nada se descarga sin que el usuario pulse «Descargar»."""
     fondo = (EXT / "background.js").read_text(encoding="utf-8")
     contenido = (EXT / "content.js").read_text(encoding="utf-8")
+    assert 'enviar("encolar"' not in fondo                      # el service worker jamás ordena descargar por su cuenta
     menu = fondo[fondo.index("const MENU"):fondo.index("chrome.runtime.onInstalled")]
     assert 'id: "detectar"' in menu and "encolar" not in menu
     manejador_menu = fondo[fondo.index("chrome.contextMenus.onClicked"):fondo.index("// --- Insignia")]
-    assert 'enviar("detectar"' in manejador_menu and 'enviar("encolar"' not in manejador_menu
+    assert "detectarConLoElegido(" in manejador_menu
     manejador_boton = fondo[fondo.index('msg.tipo === "detectar-pagina"'):]
-    assert 'enviar("detectar"' in manejador_boton and 'enviar("encolar"' not in manejador_boton
+    assert "detectarConLoElegido(" in manejador_boton
+    funcion = fondo[fondo.index("async function detectarConLoElegido"):fondo.index("async function avisar")]
+    assert 'enviar("detectar"' in funcion
     assert "detectar-pagina" in contenido and "encolar" not in contenido

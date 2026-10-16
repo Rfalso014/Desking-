@@ -17,7 +17,7 @@ from ..nativo import instalador
 from ..organizador import ORGANIZACIONES, POLITICAS
 from ..validacion import validar_url
 from ..vinculacion import Vinculacion
-from .dialogos import ALTURAS, FORMATOS_AUDIO, AnalisisDialog, ReglaDialog, texto_error
+from .dialogos import FORMATOS_AUDIO, AnalisisDialog, DialogoElementos, ReglaDialog, SelectorElementos, texto_error
 from .estilo import hoja_de_estilos, paleta
 from .formatos import formato_cuenta_atras, formato_velocidad
 from .tarjeta import ETIQUETA, Miniaturas, TarjetaTarea
@@ -180,12 +180,9 @@ class VentanaPrincipal(QMainWindow):
         for x in (self.url, b_pegar, b_analizar, b_anadir):
             fila.addWidget(x)
         fila.setStretch(0, 1); c.addLayout(fila)
-        opts = QHBoxLayout(); opts.setSpacing(10)
-        self.modo = QComboBox(); [self.modo.addItem(t, d) for t, d in MODOS_FORMULARIO]
-        self.altura = QComboBox(); [self.altura.addItem(t, d) for t, d in CALIDADES]
-        for etiqueta, combo in (("Qué descargar", self.modo), ("Calidad", self.altura)):
-            l = QLabel(etiqueta); l.setProperty("tenue", True); opts.addWidget(l); opts.addWidget(combo)
-        opts.addStretch(); c.addLayout(opts)
+        titulo_sel = QLabel("¿Qué quieres descargar?"); titulo_sel.setProperty("seccion", True); c.addWidget(titulo_sel)
+        self.selector = SelectorElementos(self.db.cargar_preferencias())
+        c.addWidget(self.selector)
         self.sugerencia = QFrame(); self.sugerencia.setObjectName("caja"); self.sugerencia.hide()
         sl = QHBoxLayout(self.sugerencia); sl.setContentsMargins(12, 8, 12, 8)
         self.texto_sugerencia = QLabel(); sl.addWidget(self.texto_sugerencia, 1)
@@ -213,20 +210,13 @@ class VentanaPrincipal(QMainWindow):
         lay.addWidget(area, 1)
         return w
 
-    def _opciones_formulario(self) -> dict:
-        o = {"modo": self.modo.currentData()}
-        if self.altura.currentData() == "mejor":
-            o["altura_max"] = None
-        elif self.altura.currentData():
-            o["altura_max"] = int(self.altura.currentData())
-        return o
-
     def _pegar(self) -> None:
         self.url.setText(QGuiApplication.clipboard().text().strip())
 
     def _anadir(self) -> None:
         try:
-            self.cola.encolar(self.url.text(), opciones=self._opciones_formulario())
+            for opciones in self.selector.opciones():        # video + audio marcados = dos descargas
+                self.cola.encolar(self.url.text(), opciones=opciones)
             self.url.clear()
             self.statusBar().showMessage("Añadida a la cola", 3000)
         except ErrorGestor as e:
@@ -275,7 +265,9 @@ class VentanaPrincipal(QMainWindow):
 
     def _accion_tarjeta(self, accion: str, id_: str) -> None:
         try:
-            if accion == "abrir_carpeta":
+            if accion == "iniciar_detectada":
+                self._autorizar_detectada(id_)
+            elif accion == "abrir_carpeta":
                 t = self.db.obtener_tarea(id_)
                 if t and t.carpeta_final and Path(t.carpeta_final).exists():
                     QDesktopServices.openUrl(QUrl.fromLocalFile(t.carpeta_final))
@@ -284,6 +276,17 @@ class VentanaPrincipal(QMainWindow):
         except ErrorGestor as e:
             QMessageBox.information(self, "No se puede", texto_error(e))
         self.refrescar()
+
+    def _autorizar_detectada(self, id_: str) -> None:
+        """El usuario autoriza una descarga detectada: antes elige qué quiere de ella."""
+        t = self.db.obtener_tarea(id_)
+        if t is None:
+            return
+        d = DialogoElementos(self, t.titulo or t.url, self.db.cargar_preferencias(), t.opciones)
+        if d.exec() and d.resultado:
+            self.cola.iniciar_detectada(id_, d.resultado[0])
+            for extra in d.resultado[1:]:                    # p. ej. el audio aparte
+                self.cola.encolar(t.url, origen=t.origen, opciones=extra)
 
     def _programar_refresco(self, _d: dict) -> None:
         if not self._temporizador.isActive():

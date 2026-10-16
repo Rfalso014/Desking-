@@ -1,8 +1,10 @@
 """Diálogos: crear/editar una regla y mostrar el análisis de un enlace."""
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit,
-                               QMessageBox, QPlainTextEdit, QSpinBox, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
+                               QLineEdit, QMessageBox, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
 
 from .. import reglas
+from ..config import Preferencias
+from ..elementos import opciones_desde_elementos, parsear_idiomas
 from ..modelos import ErrorGestor
 
 SIN_CAMBIO = ""
@@ -117,3 +119,84 @@ class AnalisisDialog(QDialog):
         botones = QDialogButtonBox(QDialogButtonBox.Close); botones.rejected.connect(self.reject)
         lay = QVBoxLayout(self); lay.addWidget(QLabel("Esto es lo que ofrece el enlace:")); lay.addWidget(caja)
         lay.addWidget(botones)
+
+
+CALIDADES_SELECTOR = [("Según mi configuración", ""), ("La mejor", "mejor"), ("1080p", "1080"), ("720p", "720"), ("480p", "480")]
+AUDIOS_SELECTOR = [("MP3", "mp3"), ("M4A", "m4a"), ("FLAC", "flac"), ("OGG", "ogg"), ("OPUS", "opus"), ("WAV", "wav"), ("Pista original", "original")]
+
+
+class SelectorElementos(QWidget):
+    """Casillas «qué quiero descargar»: video, audio, subtítulos (con idiomas) y portada, más calidad y formato de audio."""
+
+    def __init__(self, prefs: Preferencias | None = None, inicial: dict | None = None, parent=None):
+        super().__init__(parent)
+        p = prefs or Preferencias()
+        o = inicial or {}
+        modo = o.get("modo")
+        self.video = QCheckBox("Video"); self.audio = QCheckBox("Audio")
+        self.subs = QCheckBox("Subtítulos"); self.portada = QCheckBox("Portada")
+        if modo:           # se reconstruye lo que ya se había elegido (p. ej. una tarea detectada desde la extensión)
+            self.video.setChecked(modo == "video"); self.audio.setChecked(modo == "audio")
+            self.subs.setChecked(bool(o.get("subtitulos")) or modo == "subtitulos")
+            self.portada.setChecked(bool(o.get("portada", p.descargar_portada)) or modo == "portada")
+            idiomas = o.get("subtitulos") or list(p.idiomas_subtitulos)
+        else:
+            self.video.setChecked(True); self.subs.setChecked(p.descargar_subtitulos); self.portada.setChecked(p.descargar_portada)
+            idiomas = list(p.idiomas_subtitulos)
+        self.idiomas = QLineEdit(",".join(idiomas)); self.idiomas.setPlaceholderText("es,en"); self.idiomas.setMaximumWidth(120)
+        self.idiomas.setToolTip("Códigos de idioma separados por comas")
+        self.calidad = QComboBox(); [self.calidad.addItem(t, d) for t, d in CALIDADES_SELECTOR]
+        alt = o.get("altura_max", "__no__")
+        self.calidad.setCurrentIndex(max(0, self.calidad.findData("" if alt == "__no__" else "mejor" if alt is None else str(alt))))
+        self.formato_audio = QComboBox(); [self.formato_audio.addItem(t, d) for t, d in AUDIOS_SELECTOR]
+        self.formato_audio.setCurrentIndex(max(0, self.formato_audio.findData(o.get("formato_audio", p.formato_audio))))
+
+        fila1 = QHBoxLayout(); fila1.setSpacing(16)
+        for c in (self.video, self.audio, self.subs, self.portada):
+            fila1.addWidget(c)
+        fila1.addStretch()
+        fila2 = QHBoxLayout(); fila2.setSpacing(8)
+        self._et = {}
+        for clave, texto, w in (("calidad", "Calidad", self.calidad), ("audio", "Formato de audio", self.formato_audio), ("idiomas", "Idiomas", self.idiomas)):
+            l = QLabel(texto); l.setProperty("tenue", True); self._et[clave] = l; fila2.addWidget(l); fila2.addWidget(w)
+        fila2.addStretch()
+        lay = QVBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(8); lay.addLayout(fila1); lay.addLayout(fila2)
+        for c in (self.video, self.audio, self.subs):
+            c.toggled.connect(self._actualizar)
+        self._actualizar()
+
+    def _actualizar(self) -> None:
+        """Solo se habilita lo que tiene sentido para lo marcado."""
+        self.calidad.setEnabled(self.video.isChecked())
+        self.formato_audio.setEnabled(self.audio.isChecked())
+        self.idiomas.setEnabled(self.subs.isChecked())
+
+    def opciones(self) -> list[dict]:
+        """Lista de opciones (una por descarga). Lanza ErrorGestor si no hay nada marcado o un idioma es raro."""
+        return opciones_desde_elementos(
+            video=self.video.isChecked(), audio=self.audio.isChecked(), subtitulos=self.subs.isChecked(),
+            idiomas=parsear_idiomas(self.idiomas.text()), portada=self.portada.isChecked(),
+            altura=self.calidad.currentData() or None, formato_audio=self.formato_audio.currentData() if self.audio.isChecked() else None)
+
+
+class DialogoElementos(QDialog):
+    """Pregunta «¿qué quieres descargar?» antes de autorizar una descarga detectada."""
+
+    def __init__(self, parent, titulo: str, prefs: Preferencias, inicial: dict | None = None):
+        super().__init__(parent)
+        self.setWindowTitle("¿Qué quieres descargar?")
+        self.resultado: list[dict] | None = None
+        self.selector = SelectorElementos(prefs, inicial)
+        t = QLabel(titulo); t.setWordWrap(True); t.setProperty("seccion", True)
+        botones = QDialogButtonBox(); ok = botones.addButton("Descargar", QDialogButtonBox.AcceptRole); ok.setProperty("primary", True)
+        botones.addButton("Cancelar", QDialogButtonBox.RejectRole)
+        botones.accepted.connect(self._aceptar); botones.rejected.connect(self.reject)
+        lay = QVBoxLayout(self); lay.setSpacing(12); lay.addWidget(t); lay.addWidget(self.selector); lay.addWidget(botones)
+        self.setMinimumWidth(560)
+
+    def _aceptar(self) -> None:
+        try:
+            self.resultado = self.selector.opciones()
+        except ErrorGestor as e:
+            QMessageBox.warning(self, "Revisa lo que marcaste", texto_error(e)); return
+        self.accept()

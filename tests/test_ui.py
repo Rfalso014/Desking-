@@ -166,3 +166,85 @@ def test_sugerencia_del_portapapeles(ventana, qapp):
     v.sugerencia.hide(); qapp.clipboard().setText("texto cualquiera")
     v._revisar_portapapeles()
     assert v.sugerencia.isHidden()                                  # lo que no es un enlace válido no se sugiere
+
+
+def test_selector_de_elementos_por_defecto_y_combinaciones(ventana):
+    v, db = ventana
+    assert v.selector.opciones() == [{"modo": "video", "subtitulos": [], "portada": True}]       # valores por defecto de la configuración
+    v.selector.audio.setChecked(True); v.selector.subs.setChecked(True); v.selector.idiomas.setText("es, en")
+    v.selector.calidad.setCurrentIndex(v.selector.calidad.findData("720")); v.selector.formato_audio.setCurrentIndex(v.selector.formato_audio.findData("m4a"))
+    video, audio = v.selector.opciones()
+    assert video == {"modo": "video", "subtitulos": ["es", "en"], "portada": True, "altura_max": 720}
+    assert audio == {"modo": "audio", "subtitulos": [], "portada": False, "formato_audio": "m4a"}
+
+
+def test_selector_habilita_solo_lo_que_aplica(ventana):
+    v, _ = ventana
+    s = v.selector
+    s.video.setChecked(False); s.audio.setChecked(False); s.subs.setChecked(False)
+    assert not s.calidad.isEnabled() and not s.formato_audio.isEnabled() and not s.idiomas.isEnabled()
+    s.audio.setChecked(True)
+    assert s.formato_audio.isEnabled() and not s.calidad.isEnabled()
+
+
+def test_selector_nada_marcado_o_idioma_raro_da_error_claro(ventana):
+    v, _ = ventana
+    s = v.selector
+    s.video.setChecked(False); s.portada.setChecked(False)
+    with pytest.raises(ErrorGestor) as e:
+        s.opciones()
+    assert "al menos una casilla" in e.value.solucion
+    s.subs.setChecked(True); s.idiomas.setText("es;rm")
+    with pytest.raises(ErrorGestor):
+        s.opciones()
+
+
+def test_anadir_con_video_y_audio_crea_dos_descargas(ventana):
+    v, db = ventana
+    v.selector.audio.setChecked(True)
+    v.url.setText("https://a.com/v"); v._anadir()
+    tareas = db.listar_tareas()
+    assert sorted(t.opciones["modo"] for t in tareas) == ["audio", "video"]
+    v.cola.detener()
+
+
+def test_el_dialogo_recuerda_lo_que_se_eligio_al_detectar(ventana):
+    from gestor.ui.dialogos import SelectorElementos
+    _, db = ventana
+    sel = SelectorElementos(db.cargar_preferencias(), {"modo": "audio", "subtitulos": ["en"], "portada": False, "formato_audio": "flac"})
+    assert sel.audio.isChecked() and not sel.video.isChecked() and sel.subs.isChecked() and not sel.portada.isChecked()
+    assert sel.idiomas.text() == "en" and sel.formato_audio.currentData() == "flac"
+    assert sel.opciones() == [{"modo": "audio", "subtitulos": ["en"], "portada": False, "formato_audio": "flac"}]
+
+
+def test_autorizar_detectada_inicia_y_crea_la_descarga_extra(ventana, monkeypatch):
+    from gestor.ui import ventana as vm
+    v, db = ventana
+    t = _tarea(db, EstadoTarea.DETECTADO, "Detectada")
+
+    class Falso:
+        resultado = [{"modo": "video", "subtitulos": [], "portada": False}, {"modo": "audio", "subtitulos": [], "portada": False}]
+        def __init__(self, *a, **k): pass
+        def exec(self): return 1
+    monkeypatch.setattr(vm, "DialogoElementos", Falso)
+    llamadas = []
+    monkeypatch.setattr(v.cola, "iniciar_detectada", lambda id_, op: llamadas.append(("iniciar", id_, op)))
+    monkeypatch.setattr(v.cola, "encolar", lambda url, **kw: llamadas.append(("encolar", url, kw["opciones"])))
+    v._accion_tarjeta("iniciar_detectada", t.id)
+    assert llamadas[0] == ("iniciar", t.id, {"modo": "video", "subtitulos": [], "portada": False})
+    assert llamadas[1][0] == "encolar" and llamadas[1][2]["modo"] == "audio"
+
+
+def test_cancelar_el_dialogo_no_descarga_nada(ventana, monkeypatch):
+    from gestor.ui import ventana as vm
+    v, db = ventana
+    t = _tarea(db, EstadoTarea.DETECTADO, "Detectada")
+
+    class Falso:
+        resultado = None
+        def __init__(self, *a, **k): pass
+        def exec(self): return 0
+    monkeypatch.setattr(vm, "DialogoElementos", Falso)
+    monkeypatch.setattr(v.cola, "iniciar_detectada", lambda *a: pytest.fail("no debió iniciar"))
+    v._accion_tarjeta("iniciar_detectada", t.id)
+    assert db.obtener_tarea(t.id).estado == EstadoTarea.DETECTADO

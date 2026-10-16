@@ -2,8 +2,9 @@
 // quien descarga es siempre la aplicación de escritorio.
 // Todo el texto que viene de páginas externas se inserta como texto plano (textContent / nodos de texto).
 import {
-  ESTADOS_ACTIVOS, accionesDisponibles, esUrlWeb, filtrarTareas, formatearCodigo, formatearDuracion, formatearEta,
-  formatearTamano, formatearVelocidad, miniaturaSegura, nombreNavegador, nombreSitio, resumenCola, ETIQUETA_ESTADO,
+  ESTADOS_ACTIVOS, ELEMENTOS_POR_DEFECTO, accionesDisponibles, construirOpciones, elementosDesdeOpciones, esUrlWeb, filtrarTareas,
+  formatearCodigo, formatearDuracion, formatearEta, formatearTamano, formatearVelocidad, miniaturaSegura, nombreNavegador, nombreSitio,
+  resumenCola, ETIQUETA_ESTADO,
 } from "./util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +21,50 @@ function el(tag, props = {}, ...hijos) {
   return e;
 }
 
-const estado = { tab: "pagina", filtro: "todas", busqueda: "", tareas: [], recursos: [], marcados: new Set(), temporizador: null, activa: null };
+const estado = { tab: "pagina", filtro: "todas", busqueda: "", tareas: [], recursos: [], marcados: new Set(), temporizador: null, activa: null,
+                 defecto: { ...ELEMENTOS_POR_DEFECTO }, seleccionDetectado: new Map() };
+
+// --- Selector «qué descargar» (casillas combinables) --------------------------------------------------------------
+// Devuelve { nodo, leer() }. `alCambiar` recibe los valores cada vez que el usuario toca algo.
+function crearSelector(inicial, alCambiar = () => {}) {
+  const v = { ...ELEMENTOS_POR_DEFECTO, ...inicial };
+  const pastilla = (clave, texto, ayuda) => {
+    const cb = el("input", { type: "checkbox", checked: !!v[clave] });
+    cb.addEventListener("change", () => { v[clave] = cb.checked; actualizar(); alCambiar({ ...v }); });
+    return el("label", { clase: "pastilla", title: ayuda }, cb, el("span", {}, texto));
+  };
+  const select = (clave, opciones) => {
+    const s = el("select", {}, ...opciones.map(([val, txt]) => el("option", { value: val, textContent: txt })));
+    s.value = v[clave];
+    s.addEventListener("change", () => { v[clave] = s.value; alCambiar({ ...v }); });
+    return s;
+  };
+  const campoCalidad = el("label", { clase: "campo" }, "Calidad máxima", select("altura", [["", "La de mi configuración"], ["mejor", "La mejor"], ["1080", "1080p"], ["720", "720p"], ["480", "480p"]]));
+  const campoAudio = el("label", { clase: "campo" }, "Formato de audio", select("formatoAudio", [["mp3", "MP3"], ["m4a", "M4A"], ["flac", "FLAC"], ["ogg", "OGG"], ["opus", "OPUS"], ["wav", "WAV"], ["original", "Pista original"]]));
+  const entradaIdiomas = el("input", { type: "text", value: v.idiomas, placeholder: "es,en", maxLength: 40 });
+  entradaIdiomas.addEventListener("input", () => { v.idiomas = entradaIdiomas.value; alCambiar({ ...v }); });
+  const campoIdiomas = el("label", { clase: "campo" }, "Idiomas de subtítulos", entradaIdiomas);
+  const nodo = el("div", { clase: "selector" },
+    el("div", { clase: "fila" }, pastilla("video", "Video", "El video con su audio"), pastilla("audio", "Audio", "Solo el audio"),
+      pastilla("subtitulos", "Subtítulos", "Descarga los subtítulos en los idiomas que escribas"), pastilla("portada", "Portada", "La imagen de portada del video")),
+    el("div", { clase: "campos" }, campoCalidad, campoAudio, campoIdiomas));
+  function actualizar() {
+    campoCalidad.hidden = !v.video; campoAudio.hidden = !v.audio; campoIdiomas.hidden = !v.subtitulos;
+  }
+  actualizar();
+  return { nodo, leer: () => ({ ...v }) };
+}
+
+let selPagina = null;
+/** Opciones (1 o 2 descargas) según lo marcado en `valores`; si algo está mal avisa y devuelve null. */
+function opcionesDe(valores) {
+  try {
+    return construirOpciones(valores);
+  } catch (e) {
+    mostrarAviso(`${e.mensaje || "Revisa lo que marcaste."} ${e.solucion || ""}`);
+    return null;
+  }
+}
 
 // --- Comunicación con la aplicación (a través del service worker) ---------------------------
 async function nativo(accion, datos = {}) {
@@ -38,12 +82,18 @@ function mostrarAviso(texto) {
   $("aviso").textContent = texto || "";
 }
 
-function opcionesElegidas() {
-  const o = { modo: $("modo").value };
-  const h = $("altura").value;
-  if (h === "mejor") o.altura_max = null;
-  else if (h) o.altura_max = Number(h);
-  return o;
+const opcionesElegidas = () => opcionesDe(selPagina.leer());
+
+/** Envía una orden («encolar» = descargar) por cada conjunto de opciones. Devuelve true si todas salieron bien. */
+async function descargarConLoElegido(url, origen) {
+  const conjuntos = opcionesElegidas();
+  if (!conjuntos) return false;
+  for (const opciones of conjuntos) {
+    const r = await nativo("encolar", { url, origen, opciones });
+    if (!r.ok) { mostrarAviso(textoError(r.error)); return false; }
+  }
+  mostrarAviso("");
+  return true;
 }
 
 // --- Vistas ----------------------------------------------------------------------------------
@@ -190,12 +240,14 @@ $("btn-marcar").addEventListener("click", () => {
 
 async function enviarMarcados(accion) {
   const origen = estado.activa && esUrlWeb(estado.activa.url) ? estado.activa.url : undefined;
+  const conjuntos = opcionesElegidas();
+  if (!conjuntos) return;
   let hechos = 0;
   for (const i of [...estado.marcados]) {
-    const datos = { url: estado.recursos[i].url, origen };
-    if (accion === "encolar") datos.opciones = opcionesElegidas();
-    const r = await nativo(accion, datos);
-    if (!r.ok) { mostrarAviso(textoError(r.error)); break; }
+    for (const opciones of conjuntos) {                // «detectar» solo agrega a la lista: recuerda lo elegido
+      const r = await nativo(accion, { url: estado.recursos[i].url, origen, opciones });
+      if (!r.ok) { mostrarAviso(textoError(r.error)); return; }
+    }
     hechos++;
   }
   if (hechos) {
@@ -208,8 +260,7 @@ $("btn-descargar-sel").addEventListener("click", () => enviarMarcados("encolar")
 $("btn-enviar").addEventListener("click", () => enviarMarcados("detectar"));
 
 $("btn-descargar-pagina").addEventListener("click", async () => {
-  const r = await nativo("encolar", { url: estado.activa.url, opciones: opcionesElegidas() });
-  if (r.ok) { mostrarAviso(""); cambiarPestana("cola"); } else mostrarAviso(textoError(r.error));
+  if (await descargarConLoElegido(estado.activa.url)) cambiarPestana("cola");
 });
 
 // --- Análisis ----------------------------------------------------------------------------------------------
@@ -244,10 +295,7 @@ async function analizar(url) {
     el("div", { clase: "acciones" },
       el("button", { clase: "enlace", textContent: "Cerrar", onclick: () => { caja.hidden = true; } }),
       el("button", { clase: "primario", textContent: "Descargar", disabled: dg.nivel === "protegido" && dg.confianza === "confirmado",
-        onclick: async () => {
-          const x = await nativo("encolar", { url, opciones: opcionesElegidas() });
-          if (x.ok) { caja.hidden = true; cambiarPestana("cola"); } else mostrarAviso(textoError(x.error));
-        } }))));
+        onclick: async () => { if (await descargarConLoElegido(url)) { caja.hidden = true; cambiarPestana("cola"); } } }))));
 }
 
 // --- Cola ----------------------------------------------------------------------------------------------------------
@@ -283,14 +331,45 @@ function pintarTarea(t) {
     cuerpo.push(el("div", { clase: "error-caja" }, t.error.mensaje,
       el("div", {}, `Causa: ${t.error.causa || "no se pudo determinar"}`), ...(t.error.solucion ? [el("div", {}, `Qué hacer: ${t.error.solucion}`)] : [])));
   }
+  if (t.estado === "detectado") {
+    // Esperando TU autorización: eliges qué quieres y recién entonces se descarga.
+    cuerpo.push(el("div", { clase: "meta" }, "Esperando tu autorización. Elige qué descargar y pulsa «Descargar»."));
+    const inicial = estado.seleccionDetectado.get(t.id) || elementosDesdeOpciones(t.opciones, estado.defecto);
+    const sel = crearSelector(inicial, (valores) => estado.seleccionDetectado.set(t.id, valores));
+    estado.seleccionDetectado.set(t.id, sel.leer());
+    cuerpo.push(sel.nodo);
+    cuerpo.push(el("div", { clase: "acciones" },
+      el("button", { clase: "primario", textContent: "Descargar", onclick: () => autorizarDetectada(t, sel.leer()) }),
+      el("button", { clase: "peligro", textContent: "Eliminar", onclick: () => accionTarea("eliminar", t.id) })));
+    return itemTarea(t, mini, cuerpo);
+  }
   const botones = accionesDeTarea(t).map((a) => el("button", {
     clase: a === "iniciar" ? "primario" : a === "reintentar" ? "sec" : a === "eliminar" ? "peligro" : "",
     textContent: ROTULO[a], onclick: () => accionTarea(a, t.id),
   }));
   if (botones.length) cuerpo.push(el("div", { clase: "acciones" }, ...botones));
+  return itemTarea(t, mini, cuerpo);
+}
+
+function itemTarea(t, mini, cuerpo) {
   return el("li", { clase: "item" },
     el("div", { clase: "miniatura" }, mini ? el("img", { src: mini, referrerPolicy: "no-referrer", alt: "", loading: "lazy" }) : "▶"),
     el("div", { clase: "cuerpo" }, ...cuerpo));
+}
+
+/** El usuario autoriza una descarga detectada: la primera opción pone en marcha la tarea; las demás (p. ej. el audio aparte) crean otra. */
+async function autorizarDetectada(t, valores) {
+  const conjuntos = opcionesDe(valores);
+  if (!conjuntos) return;
+  const r = await nativo("iniciar", { id: t.id, opciones: conjuntos[0] });
+  if (!r.ok) { mostrarAviso(textoError(r.error)); return; }
+  for (const opciones of conjuntos.slice(1)) {
+    const x = await nativo("encolar", { url: t.url, origen: t.origen || undefined, opciones });
+    if (!x.ok) { mostrarAviso(textoError(x.error)); break; }
+  }
+  estado.seleccionDetectado.delete(t.id);
+  mostrarAviso("");
+  refrescarCola();
 }
 
 async function refrescarCola() {
@@ -325,25 +404,30 @@ document.querySelectorAll("[data-filtro]").forEach((b) => b.addEventListener("cl
 $("busqueda").addEventListener("input", (e) => { estado.busqueda = e.target.value; refrescarCola(); });
 $("btn-limpiar").addEventListener("click", async () => { await nativo("limpiar"); refrescarCola(); });
 $("btn-iniciar-todos").addEventListener("click", async () => {
-  for (const t of estado.tareas.filter((x) => x.estado === "detectado")) await nativo("iniciar", { id: t.id });
+  for (const t of estado.tareas.filter((x) => x.estado === "detectado")) {
+    // «Descargar todos»: usa lo que tenga elegido cada uno (o tu valor por defecto).
+    const conjuntos = opcionesDe(estado.seleccionDetectado.get(t.id) || elementosDesdeOpciones(t.opciones, estado.defecto));
+    if (!conjuntos) return;
+    await nativo("iniciar", { id: t.id, opciones: conjuntos[0] });
+    for (const opciones of conjuntos.slice(1)) await nativo("encolar", { url: t.url, origen: t.origen || undefined, opciones });
+  }
   refrescarCola();
 });
 
 // --- Ajustes -------------------------------------------------------------------------------------------------------
 async function cargarAjustes() {
-  const a = await chrome.storage.local.get(["botonFlotante", "modo", "altura"]);
+  const a = await chrome.storage.local.get(["botonFlotante", "elementos"]);
   $("aj-boton").checked = a.botonFlotante !== false;
-  $("aj-modo").value = a.modo || "video";
-  $("aj-altura").value = a.altura || "";
-  $("modo").value = a.modo || "video";
-  $("altura").value = a.altura || "";
+  estado.defecto = { ...ELEMENTOS_POR_DEFECTO, ...(a.elementos || {}) };
+  selPagina = crearSelector(estado.defecto);
+  $("selector-pagina").replaceChildren(selPagina.nodo);
+  const selAjustes = crearSelector(estado.defecto, (valores) => { estado.defecto = valores; chrome.storage.local.set({ elementos: valores }); });
+  $("selector-ajustes").replaceChildren(selAjustes.nodo);
   $("aj-vinculo").textContent = `Esta extensión está vinculada como «${nombreNavegador(navigator.userAgent)}». ` +
     "Puedes revocarla desde la aplicación (pestaña Extensión) o desvincularla aquí.";
 }
 
 $("aj-boton").addEventListener("change", (e) => chrome.storage.local.set({ botonFlotante: e.target.checked }));
-$("aj-modo").addEventListener("change", (e) => { chrome.storage.local.set({ modo: e.target.value }); $("modo").value = e.target.value; });
-$("aj-altura").addEventListener("change", (e) => { chrome.storage.local.set({ altura: e.target.value }); $("altura").value = e.target.value; });
 $("btn-desvincular").addEventListener("click", async () => {
   const r = await nativo("desvincular");
   if (!r.ok) { mostrarAviso(textoError(r.error)); return; }

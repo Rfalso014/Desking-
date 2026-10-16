@@ -21,6 +21,14 @@ La aplicación (GestorDescargas.exe) es la que descarga. La extensión del naveg
    "Añadir a Gestor de Descargas". Eso SOLO lo agrega a tu lista (estado "Detectado"): no se descarga nada
    hasta que tú pulses "Descargar" en la pestaña Cola de la extensión o en la aplicación.
 
+Qué descargar
+- En la aplicación (pestaña Descargas) y en la extensión puedes combinar casillas: Video, Audio, Subtítulos
+  (con sus idiomas, p. ej. es,en) y Portada, además de la calidad y el formato de audio (MP3, M4A, FLAC, OGG, OPUS, WAV).
+- Video + Audio marcados a la vez = dos descargas (los subtítulos y la portada van con la primera).
+- Solo subtítulos o solo portada también se puede: marca únicamente esa casilla.
+- Los enlaces que agregas con "+ Añadir" quedan "Detectados": al pulsar "Descargar" eliges qué quieres de ellos.
+- En la extensión, pestaña Ajustes > "Qué descargar por defecto" fija lo que usan el botón sobre los videos y el clic derecho.
+
 Notas
 - FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).
 - Deno viene en tools\deno: yt-dlp lo usa para YouTube y otros sitios que lo requieren.

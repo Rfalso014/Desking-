@@ -100,3 +100,19 @@ progress { width: 100%; height: 6px; margin-top: 6px; accent-color: var(--acento
 .interruptor { display: flex; gap: 10px; align-items: center; cursor: pointer; }
 .interruptor input { width: 18px; height: 18px; accent-color: var(--acento); }
 .pie { color: var(--tenue); font-size: 11px; text-align: center; margin: 4px 0 0; }
+
+/* Selector «qué descargar» */
+.selector { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.selector .fila { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pastilla { position: relative; }
+.pastilla input { position: absolute; opacity: 0; inset: 0; cursor: pointer; margin: 0; }
+.pastilla span { display: inline-block; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--borde); background: var(--superficie2);
+                 color: var(--tenue); font-weight: 600; font-size: 12px; }
+.pastilla input:checked + span { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
+.pastilla input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: 2px; }
+.selector .campos { display: flex; flex-wrap: wrap; gap: 8px; }
+.selector .campo { display: flex; flex-direction: column; gap: 2px; color: var(--tenue); font-size: 11px; flex: 1; min-width: 110px; }
+.selector .campo[hidden] { display: none; }
+.selector input[type="text"] { width: 100%; }
+.selector .error { color: var(--error); font-size: 12px; }
+.item .selector { margin-top: 8px; }

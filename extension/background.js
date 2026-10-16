@@ -1,6 +1,6 @@
 // Service worker: menú contextual y puente con la aplicación (Native Messaging).
 // La extensión NO descarga nada: delega todo en la aplicación de escritorio.
-import { NOMBRE_HOST, elegirUrlParaMenu, elegirUrlParaVideo, esUrlWeb, mensajeErrorNativo, ESTADOS_ACTIVOS } from "./util.js";
+import { NOMBRE_HOST, ELEMENTOS_POR_DEFECTO, construirOpciones, elegirUrlParaMenu, elegirUrlParaVideo, soloAudio, esUrlWeb, mensajeErrorNativo, ESTADOS_ACTIVOS } from "./util.js";
 
 const TIEMPO_ESPERA_MS = 20000;
 let puerto = null;
@@ -83,6 +83,24 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+/** Añade a la lista (sin descargar) con lo que el usuario dejó como «qué descargar por defecto». */
+async function detectarConLoElegido(url, origen, audio) {
+  const { elementos } = await chrome.storage.local.get("elementos");
+  const base = { ...ELEMENTOS_POR_DEFECTO, ...(elementos || {}) };
+  let conjuntos;
+  try {
+    conjuntos = construirOpciones(audio ? soloAudio(base) : base);
+  } catch (e) {
+    return { ok: false, error: { codigo: "configuracion", mensaje: e.mensaje || "Revisa «qué descargar» en los Ajustes.", solucion: e.solucion } };
+  }
+  let ultima = { ok: false, error: { mensaje: "Nada que añadir." } };
+  for (const opciones of conjuntos) {
+    ultima = await enviar("detectar", { url, origen, opciones });
+    if (!ultima.ok) return ultima;
+  }
+  return ultima;
+}
+
 async function avisar(texto) {
   await chrome.action.setBadgeBackgroundColor({ color: "#b3261e" });
   await chrome.action.setBadgeText({ text: "!" });
@@ -96,7 +114,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
   // Solo se AÑADE a la lista de detectados; la descarga empieza cuando el usuario pulse «Descargar».
-  const r = await enviar("detectar", { url, origen: tab && esUrlWeb(tab.url) ? tab.url : undefined });
+  const r = await detectarConLoElegido(url, tab && esUrlWeb(tab.url) ? tab.url : undefined, false);
   if (!r.ok) await avisar((r.error && r.error.mensaje) || "No se pudo añadir a la lista.");
   else await actualizarInsignia();
 });
@@ -129,14 +147,9 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
       responder(fallo({ codigo: "url_invalida", mensaje: "Este video no tiene una dirección descargable." }));
       return false;
     }
-    const modo = msg.modo === "audio" ? "audio" : "video";   // lista blanca: lo demás se ignora
+    const audio = msg.modo === "audio";                      // lista blanca: cualquier otra cosa = «lo de por defecto»
     const origen = sender.tab && esUrlWeb(sender.tab.url) ? sender.tab.url : undefined;
-    chrome.storage.local.get(["altura"]).then(({ altura }) => {
-      const opciones = { modo };
-      if (altura === "mejor") opciones.altura_max = null;
-      else if (/^\d+$/.test(altura || "")) opciones.altura_max = Number(altura);
-      return enviar("detectar", { url, origen, opciones });
-    }).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
+    detectarConLoElegido(url, origen, audio).then((r) => { responder(r); if (r.ok) actualizarInsignia(); });
     return true;
   }
   return false;

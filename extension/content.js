@@ -138,7 +138,7 @@
       }
     };
   }
-  btnVideo.addEventListener("click", enviar(btnVideo, "video"));
+  btnVideo.addEventListener("click", enviar(btnVideo, "defecto"));
   btnAudio.addEventListener("click", enviar(btnAudio, "audio"));
 
   (document.body || document.documentElement).appendChild(anfitrion);

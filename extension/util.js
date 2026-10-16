@@ -158,3 +158,65 @@ export function resumenCola(tareas) {
 export function miniaturaSegura(url) {
   return typeof url === "string" && /^https?:\/\//i.test(url) ? url : null;
 }
+
+// --- Qué descargar: casillas -> opciones (copia de src/gestor/elementos.py; si cambias una, cambia la otra) ---
+const IDIOMA = /^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$/;
+
+export const ELEMENTOS_POR_DEFECTO = {
+  video: true, audio: false, subtitulos: false, portada: true, idiomas: "es", altura: "", formatoAudio: "mp3",
+};
+
+/** «es, en» -> { idiomas: ["es","en"], invalidos: [] }. */
+export function parsearIdiomas(texto) {
+  const idiomas = [], invalidos = [];
+  for (const t of String(texto || "").split(",").map((x) => x.trim())) {
+    if (!t) continue;
+    if (!IDIOMA.test(t)) invalidos.push(t);
+    else if (!idiomas.includes(t)) idiomas.push(t);
+  }
+  return { idiomas, invalidos };
+}
+
+/**
+ * Devuelve 1 o 2 diccionarios de opciones (uno por descarga). Lanza Error con .mensaje y .solucion si algo está mal.
+ * Video + audio a la vez = dos descargas; los subtítulos y la portada acompañan solo a la primera.
+ */
+export function construirOpciones(e) {
+  const a = { ...ELEMENTOS_POR_DEFECTO, ...e };
+  const { idiomas, invalidos } = parsearIdiomas(a.idiomas);
+  if (invalidos.length) throw Object.assign(new Error("idioma"), { mensaje: `Idioma de subtítulos no válido: ${invalidos[0]}.`, solucion: "Usa códigos de 2 o 3 letras separados por comas, por ejemplo: es,en" });
+  const quiereSubs = !!a.subtitulos;
+  const langs = quiereSubs && !idiomas.length ? ["es"] : idiomas;
+  if (!(a.video || a.audio || quiereSubs || a.portada)) {
+    throw Object.assign(new Error("nada"), { mensaje: "No hay nada marcado para descargar.", solucion: "Marca al menos una casilla: video, audio, subtítulos o portada." });
+  }
+  const extras = (conSubs, conPortada) => ({ subtitulos: quiereSubs && conSubs ? langs : [], portada: !!(a.portada && conPortada) });
+  const conCalidad = (d) => {
+    if (a.altura === "mejor") d.altura_max = null;
+    else if (a.altura) d.altura_max = Number(a.altura);
+    return d;
+  };
+  const conAudio = (d) => { if (a.formatoAudio) d.formato_audio = a.formatoAudio; return d; };
+  if (a.video && a.audio) return [conCalidad({ modo: "video", ...extras(true, true) }), conAudio({ modo: "audio", ...extras(false, false) })];
+  if (a.video) return [conCalidad({ modo: "video", ...extras(true, true) })];
+  if (a.audio) return [conAudio({ modo: "audio", ...extras(true, true) })];
+  if (quiereSubs) return [{ modo: "subtitulos", ...extras(true, true) }];
+  return [{ modo: "portada", portada: true, subtitulos: [] }];
+}
+
+/** Reconstruye las casillas a partir de las opciones guardadas en una tarea (o usa los valores por defecto). */
+export function elementosDesdeOpciones(op, defecto = ELEMENTOS_POR_DEFECTO) {
+  if (!op || !op.modo) return { ...defecto };
+  const subs = Array.isArray(op.subtitulos) ? op.subtitulos : [];
+  return {
+    video: op.modo === "video", audio: op.modo === "audio", subtitulos: subs.length > 0 || op.modo === "subtitulos",
+    portada: !!op.portada || op.modo === "portada", idiomas: subs.length ? subs.join(",") : defecto.idiomas,
+    altura: !("altura_max" in op) ? "" : op.altura_max === null ? "mejor" : String(op.altura_max),
+    formatoAudio: op.formato_audio || defecto.formatoAudio,
+  };
+}
+
+/** Elementos para el botón «♪» del video: solo audio, con el formato por defecto del usuario. */
+export function soloAudio(defecto = ELEMENTOS_POR_DEFECTO) {
+  return { ...defecto, video: false, audio: true, subtitulos: false, portada: false };
+}
