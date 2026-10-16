@@ -1,0 +1,12 @@
+# Metadatos del proyecto y configuración de pytest.
+[project]
+name = "gestor-descargas"
+version = "0.1.0"
+description = "Gestor de descargas multimedia (app de escritorio + extensión de navegador)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+# "pythonpath" le dice a pytest dónde buscar el paquete `gestor`
+# sin tener que instalarlo: así `import gestor` funciona en las pruebas.
+pythonpath = ["src"]
+testpaths = ["tests"]

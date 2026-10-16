@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+# Datos locales: nunca se suben (pueden contener rutas, historial, cookies)
+*.db
+*.sqlite3
+cookies*.txt
+.env
