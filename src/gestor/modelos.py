@@ -57,6 +57,16 @@ class CodigoError(str, Enum):
     CONTENIDO_NO_DISPONIBLE = "contenido_no_disponible"
     AUTENTICACION = "autenticacion"
     CONEXION = "conexion"
+    FORMATO_NO_DISPONIBLE = "formato_no_disponible"
+    SUBTITULOS_INEXISTENTES = "subtitulos_inexistentes"
+    ESPACIO_INSUFICIENTE = "espacio_insuficiente"
+    PERMISOS = "permisos"
+    FFMPEG_AUSENTE = "ffmpeg_ausente"
+    PROCESAMIENTO = "procesamiento"
+    CONTENIDO_PROTEGIDO = "contenido_protegido"
+    COMUNICACION = "comunicacion"
+    CONFIGURACION = "configuracion"
+    CANCELADO = "cancelado"
     DESCONOCIDO = "desconocido"
 
 

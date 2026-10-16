@@ -13,6 +13,7 @@ from yt_dlp.utils import DownloadError
 
 from .modelos import (CodigoError, ErrorGestor, FormatoInfo, InfoContenido,
                       TipoFormato)
+from .errores import traducir_excepcion
 from .validacion import validar_url
 
 
@@ -73,46 +74,6 @@ def normalizar_info(info: dict[str, Any], url: str) -> InfoContenido:
     )
 
 
-def _traducir_error(url: str, exc: DownloadError) -> ErrorGestor:
-    """Traduce el error de yt-dlp a uno entendible.
-
-    Solo afirmamos una causa si el mensaje de yt-dlp la indica claramente.
-    En cualquier otro caso: DESCONOCIDO, con el texto original como detalle.
-    """
-    texto = str(exc)
-    bajo = texto.lower()
-    if "unsupported url" in bajo:
-        return ErrorGestor(CodigoError.SITIO_NO_COMPATIBLE,
-                           "Este enlace no es compatible.",
-                           causa="yt-dlp no reconoce el sitio o la página no contiene un video detectable.",
-                           solucion="Prueba con el enlace directo del video, o revisa si yt-dlp está actualizado.",
-                           detalle_tecnico=texto)
-    if any(p in bajo for p in ("private video", "video unavailable", "has been removed",
-                               "this video is not available", "does not exist", "http error 404")):
-        return ErrorGestor(CodigoError.CONTENIDO_NO_DISPONIBLE,
-                           "El contenido no está disponible.",
-                           causa="Puede estar eliminado, privado o restringido por región.",
-                           solucion="Comprueba que el enlace abre en tu navegador.",
-                           detalle_tecnico=texto)
-    if any(p in bajo for p in ("sign in", "log in", "login required", "http error 401", "http error 403")):
-        return ErrorGestor(CodigoError.AUTENTICACION,
-                           "El sitio pide iniciar sesión o negó el acceso.",
-                           causa="El contenido requiere una cuenta o permisos.",
-                           solucion="Más adelante podrás indicar cookies del navegador (fase posterior).",
-                           detalle_tecnico=texto)
-    if any(p in bajo for p in ("urlopen error", "timed out", "name or service not known",
-                               "getaddrinfo failed", "connection")):
-        return ErrorGestor(CodigoError.CONEXION,
-                           "No se pudo conectar con el sitio.",
-                           causa="Falla de red, o el sitio no responde.",
-                           solucion="Revisa tu conexión a internet y reintenta.",
-                           detalle_tecnico=texto)
-    return ErrorGestor(CodigoError.DESCONOCIDO,
-                       "No se pudo analizar el enlace.",
-                       causa=None, solucion="Reintenta; si persiste, revisa los detalles técnicos.",
-                       detalle_tecnico=texto)
-
-
 # Un "extractor de info" es cualquier función URL -> diccionario de yt-dlp.
 # Permite inyectar uno falso en las pruebas.
 FuncionExtraer = Callable[[str], dict[str, Any]]
@@ -139,7 +100,7 @@ def obtener_info(url: str, *, extraer: FuncionExtraer = _extraer_con_ytdlp,
     try:
         info = extraer(url)
     except DownloadError as exc:
-        raise _traducir_error(url, exc) from exc
+        raise traducir_excepcion(exc) from exc
     if not info:
         raise ErrorGestor(CodigoError.DESCONOCIDO, "El sitio no devolvió información.")
     return normalizar_info(info, url)

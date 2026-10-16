@@ -10,3 +10,6 @@ dist/
 *.sqlite3
 cookies*.txt
 .env
+
+tools/
+descargas_prueba/
