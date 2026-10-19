@@ -13,7 +13,7 @@ from .. import reglas
 from ..cola import GestorCola
 from ..config import NAVEGADORES_SESION, RAIZ_PROYECTO, localizar_deno, localizar_ffmpeg
 from ..modelos import ESTADOS_ACTIVOS, ErrorGestor, EstadoTarea, Tarea
-from ..nativo import instalador
+from ..nativo import autoinicio, instalador
 from ..organizador import ORGANIZACIONES, POLITICAS
 from ..validacion import validar_url
 from ..vinculacion import Vinculacion
@@ -108,6 +108,8 @@ class VentanaPrincipal(QMainWindow):
         self.tarjetas: dict[str, TarjetaTarea] = {}
         self.filtro_actual = "todas"
         self._ultima_sugerencia = ""
+        self.ocultar_al_cerrar = False      # la aplicación lo activa cuando hay icono en la bandeja
+        self.saliendo = False
 
         central = QWidget(); self.setCentralWidget(central)
         raiz = QHBoxLayout(central); raiz.setContentsMargins(0, 0, 0, 0); raiz.setSpacing(0)
@@ -126,6 +128,16 @@ class VentanaPrincipal(QMainWindow):
         self._reloj = QTimer(self, interval=1000); self._reloj.timeout.connect(self._cada_segundo); self._reloj.start()
         QGuiApplication.clipboard().dataChanged.connect(self._revisar_portapapeles)
         self.refrescar(); self._cargar_reglas(); self._pintar_vinculos(); self._pintar_codigo(); self._actualizar_estado_sistema()
+
+    def closeEvent(self, e) -> None:
+        if self.ocultar_al_cerrar and not self.saliendo:
+            e.ignore()
+            self.hide()
+            return
+        super().closeEvent(e)
+
+    def mostrar_al_frente(self) -> None:
+        self.showNormal(); self.raise_(); self.activateWindow()
 
     # --- tema ---------------------------------------------------------------------------
     def aplicar_tema(self) -> None:
@@ -578,6 +590,8 @@ class VentanaPrincipal(QMainWindow):
         cl.addWidget(g3)
 
         g4 = QGroupBox("Apariencia y sistema"); f4 = QFormLayout(g4)
+        self.c_autoinicio = QCheckBox("Iniciar con Windows, en segundo plano (la extensión funciona sin abrir la aplicación)")
+        self.c_autoinicio.setChecked(autoinicio.activo()); f4.addRow("", self.c_autoinicio)
         self.c_tema = QComboBox(); [self.c_tema.addItem(t, d) for t, d in TEMAS]
         self.c_tema.setCurrentIndex(self.c_tema.findData(p.tema)); f4.addRow("Tema", self.c_tema)
         self.estado_sistema = QLabel(); self.estado_sistema.setWordWrap(True); f4.addRow("Estado", self.estado_sistema)
@@ -621,6 +635,8 @@ class VentanaPrincipal(QMainWindow):
         p.idiomas_subtitulos, p.descargar_subtitulos = idiomas, self.c_subs.isChecked()
         p.descargar_portada, p.descargas_simultaneas = self.c_portada.isChecked(), self.c_simult.value()
         p.reanudar_al_iniciar, p.velocidad, p.tema = self.c_reanudar.isChecked(), self.c_vel.currentData(), self.c_tema.currentData()
+        if self.c_autoinicio.isChecked() != autoinicio.activo():
+            autoinicio.fijar(self.c_autoinicio.isChecked())
         assert p.organizacion in ORGANIZACIONES and p.duplicados in POLITICAS
         self.db.guardar_preferencias(p)
         self.aplicar_tema()

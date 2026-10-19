@@ -64,6 +64,8 @@ def _abrir_app() -> None:
     cmd = config_host().get("comando_app")
     if not (isinstance(cmd, list) and cmd and all(isinstance(c, str) for c in cmd)):
         return
+    if "--segundo-plano" not in cmd:
+        cmd = [*cmd, "--segundo-plano"]          # sin ventana: queda en la bandeja del sistema trabajando
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     subprocess.Popen(cmd, creationflags=flags, close_fds=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -72,7 +74,7 @@ def _abrir_app() -> None:
 def _conectar(esperar_app: float | None = None):
     """Abre la conexión con la app; si no está abierta, intenta lanzarla y espera."""
     if esperar_app is None:
-        esperar_app = float(os.environ.get("GESTOR_ESPERA_APP", "8"))
+        esperar_app = float(os.environ.get("GESTOR_ESPERA_APP", "25"))
     lanzada = False
     fin = time.monotonic() + esperar_app
     while True:

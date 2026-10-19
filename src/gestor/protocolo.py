@@ -23,12 +23,13 @@ _TOKEN = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
 _CODIGO = re.compile(r"^[A-Za-z0-9 -]{4,16}$")
 
 # Acciones que se pueden usar SIN estar vinculado.
-SIN_TOKEN = {"ping", "emparejar"}
+SIN_TOKEN = {"ping", "emparejar", "mostrar"}
 _ESTADOS = {e.value for e in EstadoTarea}
 
 # accion -> (campos obligatorios, campos opcionales)
 ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "ping": (set(), set()),
+    "mostrar": (set(), set()),
     "analizar": ({"url"}, set()),
     "detectar": ({"url"}, {"origen", "opciones"}),
     "encolar": ({"url"}, {"origen", "opciones"}),

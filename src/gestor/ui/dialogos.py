@@ -142,7 +142,7 @@ class SelectorDestino(QWidget):
     def __init__(self, prefs: Preferencias | None = None, parent=None):
         super().__init__(parent)
         self._defecto = (prefs or Preferencias()).carpeta_raiz
-        self.carpeta = QLineEdit(); self.carpeta.setMaximumWidth(220); self.carpeta.setClearButtonEnabled(True)
+        self.carpeta = QLineEdit(); self.carpeta.setMinimumWidth(190); self.carpeta.setMaximumWidth(240); self.carpeta.setClearButtonEnabled(True)
         self.carpeta.setPlaceholderText("Nombre de carpeta (opcional)")
         self.carpeta.setToolTip("Si escribes un nombre, se crea esa carpeta y dentro se separan Videos, Musica, Subtitulos y Portadas.")
         self.lugar = QLineEdit(); self.lugar.setReadOnly(True)

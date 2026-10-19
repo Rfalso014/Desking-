@@ -111,3 +111,35 @@ def test_el_boton_flotante_y_el_menu_no_descargan_solo_anaden_a_la_lista():
     funcion = fondo[fondo.index("async function detectarConLoElegido"):fondo.index("async function avisar")]
     assert 'enviar("detectar"' in funcion
     assert "detectar-pagina" in contenido and "encolar" not in contenido
+
+
+def test_autoinicio_escribe_y_quita_en_una_clave_de_prueba():
+    import sys
+    import winreg
+    import pytest
+    if sys.platform != "win32":
+        pytest.skip("solo Windows")
+    from gestor.nativo import autoinicio
+    clave = r"Software\GestorDescargasPrueba\Run"
+    try:
+        assert not autoinicio.activo(clave=clave)
+        autoinicio.fijar(True, clave=clave)
+        assert autoinicio.activo(clave=clave)
+        assert "--segundo-plano" in autoinicio.comando()
+        autoinicio.fijar(False, clave=clave)
+        assert not autoinicio.activo(clave=clave)
+    finally:
+        for k in (clave, r"Software\GestorDescargasPrueba"):
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, k)
+            except OSError:
+                pass
+
+
+def test_host_abre_la_app_en_segundo_plano(monkeypatch):
+    from gestor.nativo import host
+    lanzados = []
+    monkeypatch.setattr(host, "config_host", lambda: {"comando_app": ["app.exe"]})
+    monkeypatch.setattr(host.subprocess, "Popen", lambda cmd, **k: lanzados.append(cmd))
+    host._abrir_app()
+    assert lanzados == [["app.exe", "--segundo-plano"]]

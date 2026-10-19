@@ -54,6 +54,7 @@ class Manejador:
     def __init__(self, cola: GestorCola, vinculacion: Vinculacion | None = None,
                  abrir_carpeta: Callable[[str], None] = _abrir_en_explorador):
         self.cola = cola
+        self.al_mostrar: Callable[[], None] | None = None     # la aplicación lo fija: trae la ventana al frente
         self.vinculacion = vinculacion or Vinculacion(cola.db)
         self._abrir = abrir_carpeta
 
@@ -77,6 +78,10 @@ class Manejador:
         c, v = self.cola, self.vinculacion
         if accion == "ping":
             return {"app": "gestor-descargas", "version": 1, "vinculado": v.validar_token(token)}
+        if accion == "mostrar":
+            if self.al_mostrar:
+                self.al_mostrar()
+            return {}
         if accion == "emparejar":
             return {"token": v.emparejar(d["codigo"], d.get("nombre", "Navegador"))}
         if accion == "desvincular":
