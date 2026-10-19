@@ -23,13 +23,16 @@ CASOS = [
     dict(video=False, audio=False, subtitulos=False, portada=True, idiomas="es", altura="", formatoAudio="mp3"),
     dict(video=False, audio=False, subtitulos=False, portada=False, idiomas="es", altura="", formatoAudio="mp3"),   # nada marcado
     dict(video=True, audio=False, subtitulos=True, portada=False, idiomas="es;rm", altura="", formatoAudio="mp3"),   # idioma inválido
+    dict(video=True, audio=True, subtitulos=True, portada=True, idiomas="es", altura="720", formatoAudio="mp3", carpeta="  Mi curso "),
+    dict(video=False, audio=True, subtitulos=False, portada=False, idiomas="es", altura="", formatoAudio="mp3", carpeta=""),
 ]
 
 
 def en_python(c: dict):
     try:
         return opciones_desde_elementos(video=c["video"], audio=c["audio"], subtitulos=c["subtitulos"], idiomas=parsear_idiomas(c["idiomas"]),
-                                        portada=c["portada"], altura=c["altura"] or None, formato_audio=c["formatoAudio"])
+                                        portada=c["portada"], altura=c["altura"] or None, formato_audio=c["formatoAudio"],
+                                        carpeta=c.get("carpeta"))
     except ErrorGestor:
         return "error"
 

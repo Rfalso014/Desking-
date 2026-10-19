@@ -88,6 +88,8 @@ class Manejador:
             return tarea_resumen(c.detectar(d["url"], d.get("origen"), d.get("opciones")))
         if accion == "encolar":
             return tarea_resumen(c.encolar(d["url"], origen=d.get("origen"), opciones=d.get("opciones")))
+        if accion == "cancelar_todas":
+            return {"canceladas": c.cancelar_todas()}
         if accion == "limpiar":
             return {"eliminadas": c.limpiar_terminadas()}
         if accion == "iniciar":

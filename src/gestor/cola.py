@@ -163,6 +163,14 @@ class GestorCola:
                 self._publicar(t)
         return self._requerir(id_)
 
+    def cancelar_todas(self) -> int:
+        """Cancela todo lo que está detectado, en espera o en curso. Devuelve cuántas tareas afectó."""
+        n = 0
+        for t in self.db.listar_tareas(estados=[EstadoTarea.DETECTADO, EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS], limite=10000):
+            self.cancelar(t.id)
+            n += 1
+        return n
+
     def reintentar(self, id_: str) -> Tarea:
         t = self._requerir(id_)
         if t.estado not in (EstadoTarea.ERROR, EstadoTarea.CANCELADO):

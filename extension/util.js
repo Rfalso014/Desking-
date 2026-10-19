@@ -163,7 +163,7 @@ export function miniaturaSegura(url) {
 const IDIOMA = /^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$/;
 
 export const ELEMENTOS_POR_DEFECTO = {
-  video: true, audio: false, subtitulos: false, portada: true, idiomas: "es", altura: "", formatoAudio: "mp3",
+  video: true, audio: false, subtitulos: false, portada: true, idiomas: "es", altura: "", formatoAudio: "mp3", carpeta: "",
 };
 
 /** «es, en» -> { idiomas: ["es","en"], invalidos: [] }. */
@@ -197,11 +197,13 @@ export function construirOpciones(e) {
     return d;
   };
   const conAudio = (d) => { if (a.formatoAudio) d.formato_audio = a.formatoAudio; return d; };
-  if (a.video && a.audio) return [conCalidad({ modo: "video", ...extras(true, true) }), conAudio({ modo: "audio", ...extras(false, false) })];
-  if (a.video) return [conCalidad({ modo: "video", ...extras(true, true) })];
-  if (a.audio) return [conAudio({ modo: "audio", ...extras(true, true) })];
-  if (quiereSubs) return [{ modo: "subtitulos", ...extras(true, true) }];
-  return [{ modo: "portada", portada: true, subtitulos: [] }];
+  const nombre = String(a.carpeta || "").trim();
+  const conCarpeta = (lista) => (nombre ? lista.map((d) => ({ ...d, subcarpeta: nombre })) : lista);
+  if (a.video && a.audio) return conCarpeta([conCalidad({ modo: "video", ...extras(true, true) }), conAudio({ modo: "audio", ...extras(false, false) })]);
+  if (a.video) return conCarpeta([conCalidad({ modo: "video", ...extras(true, true) })]);
+  if (a.audio) return conCarpeta([conAudio({ modo: "audio", ...extras(true, true) })]);
+  if (quiereSubs) return conCarpeta([{ modo: "subtitulos", ...extras(true, true) }]);
+  return conCarpeta([{ modo: "portada", portada: true, subtitulos: [] }]);
 }
 
 /** Reconstruye las casillas a partir de las opciones guardadas en una tarea (o usa los valores por defecto). */
@@ -213,6 +215,7 @@ export function elementosDesdeOpciones(op, defecto = ELEMENTOS_POR_DEFECTO) {
     portada: !!op.portada || op.modo === "portada", idiomas: subs.length ? subs.join(",") : defecto.idiomas,
     altura: !("altura_max" in op) ? "" : op.altura_max === null ? "mejor" : String(op.altura_max),
     formatoAudio: op.formato_audio || defecto.formatoAudio,
+    carpeta: op.subcarpeta || defecto.carpeta || "",
   };
 }
 

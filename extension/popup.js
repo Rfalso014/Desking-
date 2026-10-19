@@ -44,10 +44,14 @@ function crearSelector(inicial, alCambiar = () => {}) {
   const entradaIdiomas = el("input", { type: "text", value: v.idiomas, placeholder: "es,en", maxLength: 40 });
   entradaIdiomas.addEventListener("input", () => { v.idiomas = entradaIdiomas.value; alCambiar({ ...v }); });
   const campoIdiomas = el("label", { clase: "campo" }, "Idiomas de subtítulos", entradaIdiomas);
+  const entradaCarpeta = el("input", { type: "text", value: v.carpeta || "", placeholder: "Sin carpeta (la de la app)", maxLength: 80 });
+  entradaCarpeta.addEventListener("input", () => { v.carpeta = entradaCarpeta.value; alCambiar({ ...v }); });
+  const campoCarpeta = el("label", { clase: "campo", title: "Se crea en la carpeta de descargas de la aplicación, con Videos, Musica, Subtitulos y Portadas dentro" },
+    "Guardar en la carpeta", entradaCarpeta);
   const nodo = el("div", { clase: "selector" },
     el("div", { clase: "fila" }, pastilla("video", "Video", "El video con su audio"), pastilla("audio", "Audio", "Solo el audio"),
       pastilla("subtitulos", "Subtítulos", "Descarga los subtítulos en los idiomas que escribas"), pastilla("portada", "Portada", "La imagen de portada del video")),
-    el("div", { clase: "campos" }, campoCalidad, campoAudio, campoIdiomas));
+    el("div", { clase: "campos" }, campoCalidad, campoAudio, campoIdiomas, campoCarpeta));
   function actualizar() {
     campoCalidad.hidden = !v.video; campoAudio.hidden = !v.audio; campoIdiomas.hidden = !v.subtitulos;
   }
@@ -402,6 +406,12 @@ document.querySelectorAll("[data-filtro]").forEach((b) => b.addEventListener("cl
   refrescarCola();
 }));
 $("busqueda").addEventListener("input", (e) => { estado.busqueda = e.target.value; refrescarCola(); });
+$("btn-cancelar-todas").addEventListener("click", async () => {
+  if (!estado.tareas.some((t) => t.estado === "detectado" || ESTADOS_ACTIVOS.includes(t.estado))) return;
+  if (!confirm("¿Cancelar todas las descargas en curso, en espera y detectadas?")) return;
+  await nativo("cancelar_todas");
+  refrescarCola();
+});
 $("btn-limpiar").addEventListener("click", async () => { await nativo("limpiar"); refrescarCola(); });
 $("btn-iniciar-todos").addEventListener("click", async () => {
   for (const t of estado.tareas.filter((x) => x.estado === "detectado")) {

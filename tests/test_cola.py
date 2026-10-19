@@ -253,3 +253,13 @@ def test_cancelar_mientras_analiza_no_se_cuelga(tmp_path):
         assert esperar(cola, t.id, FINALES, t=5).estado == EstadoTarea.CANCELADO
     finally:
         liberar.set(); cola.detener(); db.cerrar()
+
+
+def test_cancelar_todas(entorno):
+    cola, db, _ = entorno
+    a = db.crear_tarea("https://a.test/1", estado=EstadoTarea.DETECTADO)
+    b = db.crear_tarea("https://a.test/2", estado=EstadoTarea.DETECTADO)
+    c = db.crear_tarea("https://a.test/3", estado=EstadoTarea.COMPLETADO)
+    assert cola.cancelar_todas() == 2
+    assert cola.obtener(a.id).estado == cola.obtener(b.id).estado == EstadoTarea.CANCELADO
+    assert cola.obtener(c.id).estado == EstadoTarea.COMPLETADO

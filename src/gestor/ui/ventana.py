@@ -199,6 +199,8 @@ class VentanaPrincipal(QMainWindow):
             b = _boton(texto, filtro=True); b.clicked.connect(lambda _=False, k=clave: self._filtrar(k))
             self._grupo_filtros.addButton(b); filtros.addWidget(b); self._botones_filtro[clave] = b
         self._botones_filtro["todas"].setChecked(True); filtros.addStretch()
+        cancelar_todas = _boton("Cancelar todas", peligro=True, tip="Detiene todo lo que está descargando, en espera o detectado")
+        cancelar_todas.clicked.connect(self._cancelar_todas); filtros.addWidget(cancelar_todas)
         limpiar = _boton("Quitar las terminadas de la lista", enlace=True, tip="No borra los archivos descargados")
         limpiar.clicked.connect(self._limpiar_terminadas); filtros.addWidget(limpiar); lay.addLayout(filtros)
 
@@ -261,6 +263,16 @@ class VentanaPrincipal(QMainWindow):
     def _filtrar(self, clave: str) -> None:
         self.filtro_actual = clave
         self.refrescar()
+
+    def _cancelar_todas(self) -> None:
+        pendientes = self.cola.listar(estados=[EstadoTarea.DETECTADO, EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS], limite=10000)
+        if not pendientes:
+            self.statusBar().showMessage("No hay nada que cancelar", 3000)
+            return
+        if QMessageBox.question(self, "Cancelar todas", f"¿Cancelar las {len(pendientes)} descargas en curso, en espera y detectadas?\n"
+                                "(Podrás reintentarlas desde el Historial.)") == QMessageBox.Yes:
+            n = self.cola.cancelar_todas(); self.refrescar()
+            self.statusBar().showMessage(f"{n} descarga(s) canceladas", 4000)
 
     def _limpiar_terminadas(self) -> None:
         self.cola.limpiar_terminadas(); self.refrescar()

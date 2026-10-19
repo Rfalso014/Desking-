@@ -36,6 +36,7 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "listar": (set(), {"estados", "texto", "limite"}),
     "estado": ({"id"}, set()),
     "cancelar": ({"id"}, set()),
+    "cancelar_todas": (set(), set()),
     "reintentar": ({"id"}, set()),
     "eliminar": ({"id"}, set()),
     "emparejar": ({"codigo"}, {"nombre"}),

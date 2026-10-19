@@ -36,7 +36,8 @@ def parsear_idiomas(texto: str | list | tuple | None) -> list[str]:
 
 def opciones_desde_elementos(*, video: bool = True, audio: bool = False, subtitulos: bool | list = False,
                              idiomas: list[str] | None = None, portada: bool = False,
-                             altura: int | str | None = None, formato_audio: str | None = None) -> list[dict]:
+                             altura: int | str | None = None, formato_audio: str | None = None,
+                             carpeta: str | None = None) -> list[dict]:
     """Devuelve 1 o 2 diccionarios de opciones (uno por descarga). Lanza ErrorGestor si no hay nada marcado."""
     langs = parsear_idiomas(idiomas or [])
     quiere_subs = bool(subtitulos)
@@ -62,12 +63,16 @@ def opciones_desde_elementos(*, video: bool = True, audio: bool = False, subtitu
             d["formato_audio"] = formato_audio
         return d
 
+    def con_carpeta(lista: list[dict]) -> list[dict]:
+        nombre = (carpeta or "").strip()
+        return [{**d, "subcarpeta": nombre} for d in lista] if nombre else lista
+
     if video and audio:
-        return [con_calidad({"modo": "video", **extras(True, True)}), con_audio({"modo": "audio", **extras(False, False)})]
+        return con_carpeta([con_calidad({"modo": "video", **extras(True, True)}), con_audio({"modo": "audio", **extras(False, False)})])
     if video:
-        return [con_calidad({"modo": "video", **extras(True, True)})]
+        return con_carpeta([con_calidad({"modo": "video", **extras(True, True)})])
     if audio:
-        return [con_audio({"modo": "audio", **extras(True, True)})]
+        return con_carpeta([con_audio({"modo": "audio", **extras(True, True)})])
     if quiere_subs:
-        return [{"modo": "subtitulos", **extras(True, True)}]
-    return [{"modo": "portada", "portada": True, "subtitulos": []}]
+        return con_carpeta([{"modo": "subtitulos", **extras(True, True)}])
+    return con_carpeta([{"modo": "portada", "portada": True, "subtitulos": []}])
