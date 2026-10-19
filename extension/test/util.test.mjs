@@ -110,3 +110,13 @@ test("solo se cargan miniaturas http/https", () => {
   assert.equal(miniaturaSegura("https://a.com/t.jpg"), "https://a.com/t.jpg");
   for (const u of ["javascript:alert(1)", "data:image/png;base64,AAA", "blob:x", "", null, 5]) assert.equal(miniaturaSegura(u), null, String(u));
 });
+
+import { nombreDeArchivo as _nombre, ordenarRecursos as _ordenar } from "../util.js";
+test("nombreDeArchivo usa el último tramo de la ruta, sin parámetros", () => {
+  assert.equal(_nombre("https://i.ytimg.com/vi/a58/hq720.jpg?sqp=-oaym&rs=AOn4"), "hq720.jpg");
+  assert.equal(_nombre("https://sitio.com/"), "sitio.com");
+});
+test("ordenarRecursos pone videos primero e imágenes al final", () => {
+  const r = _ordenar([{ tipo: "imagen", url: "1" }, { tipo: "video", url: "2" }, { tipo: "enlace", url: "3" }, { tipo: "imagen", url: "4" }]);
+  assert.deepEqual(r.map((x) => x.url), ["2", "3", "1", "4"]);
+});

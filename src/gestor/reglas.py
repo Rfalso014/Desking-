@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .config import PERFILES_VELOCIDAD, Preferencias
+from .config import PERFILES_VELOCIDAD, Preferencias, opciones_sesion
 from .catalogo import CAMPOS_ACCION
 from .descargador import OpcionesDescarga
 from .modelos import CodigoError, ErrorGestor
@@ -80,7 +80,7 @@ class Resolucion:
             modo=c["modo"], altura_max=c["altura_max"], contenedor_video=c["contenedor_video"],
             formato_audio=c["formato_audio"], subtitulos=tuple(c["subtitulos"]), portada=c["portada"],
             plantilla_nombre=prefs.plantilla_nombre, ffmpeg_dir=ffmpeg_dir,
-            fragmentos=fragmentos, trozo_http=trozo, deno=deno)
+            fragmentos=fragmentos, trozo_http=trozo, deno=deno, sesion=opciones_sesion(prefs))
 
     def texto(self) -> list[str]:
         return [f"{k} = {self.campos.get(k)!r}  (origen: {o})" for k, o in self.explicacion.items()]

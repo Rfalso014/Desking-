@@ -58,6 +58,21 @@ def localizar_deno() -> Path | None:
 PERFILES_VELOCIDAD = {"normal": (1, 0), "rapida": (8, 10 * 1024 * 1024), "maxima": (16, 10 * 1024 * 1024)}
 
 
+NAVEGADORES_SESION = ("chrome", "edge", "firefox", "brave", "opera", "vivaldi")
+
+
+def opciones_sesion(prefs: "Preferencias") -> dict:
+    """Opciones de yt-dlp para usar la sesión ya iniciada en el navegador (o un cookies.txt). Vacío = sin sesión.
+
+    No se guardan contraseñas ni cookies: solo qué navegador usar o la ruta de un archivo.
+    """
+    if prefs.archivo_cookies and Path(prefs.archivo_cookies).is_file():
+        return {"cookiefile": str(prefs.archivo_cookies)}
+    if prefs.sesion_navegador in NAVEGADORES_SESION:
+        return {"cookiesfrombrowser": (prefs.sesion_navegador,)}
+    return {}
+
+
 @dataclass
 class Preferencias:
     carpeta_raiz: Path = field(default_factory=lambda: Path.home() / "Downloads" / "GestorDescargas")
@@ -74,3 +89,5 @@ class Preferencias:
     tema: str = "auto"                       # "auto" | "claro" | "oscuro"
     velocidad: str = "rapida"               # "normal" | "rapida" | "maxima" (ver PERFILES_VELOCIDAD)
     reanudar_al_iniciar: bool = True         # recuperar tareas pendientes al abrir
+    sesion_navegador: str = "ninguno"        # "ninguno" | uno de NAVEGADORES_SESION: usar su sesión iniciada
+    archivo_cookies: str = ""                # alternativa: ruta de un cookies.txt exportado

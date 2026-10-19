@@ -69,6 +69,24 @@ export const ETIQUETA_ESTADO = {
   procesando: "Procesando", completado: "Completado", cancelado: "Cancelado", error: "Error",
 };
 
+/** Nombre legible de un recurso a partir de su URL (último tramo de la ruta, sin parámetros). */
+export function nombreDeArchivo(url) {
+  try {
+    const partes = new URL(url).pathname.split("/").filter(Boolean);
+    const ultimo = decodeURIComponent(partes[partes.length - 1] || "");
+    return (ultimo || new URL(url).hostname).slice(0, 80);
+  } catch {
+    return String(url || "").slice(0, 80);
+  }
+}
+
+const ORDEN_RECURSOS = { video: 0, audio: 1, enlace: 2, imagen: 3 };
+
+/** Videos y audios primero, imágenes al final (conserva el orden dentro de cada tipo). */
+export function ordenarRecursos(lista) {
+  return lista.map((r, i) => [r, i]).sort((a, b) => (ORDEN_RECURSOS[a[0].tipo] ?? 2) - (ORDEN_RECURSOS[b[0].tipo] ?? 2) || a[1] - b[1]).map(([r]) => r);
+}
+
 export const ESTADOS_ACTIVOS = ["analizando", "pendiente", "descargando", "procesando"];
 
 /** Acciones disponibles para una tarea según su estado. */

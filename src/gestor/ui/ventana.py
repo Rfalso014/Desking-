@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComb
 
 from .. import reglas
 from ..cola import GestorCola
-from ..config import RAIZ_PROYECTO, localizar_deno, localizar_ffmpeg
+from ..config import NAVEGADORES_SESION, RAIZ_PROYECTO, localizar_deno, localizar_ffmpeg
 from ..modelos import ESTADOS_ACTIVOS, ErrorGestor, EstadoTarea, Tarea
 from ..nativo import instalador
 from ..organizador import ORGANIZACIONES, POLITICAS
@@ -544,6 +544,19 @@ class VentanaPrincipal(QMainWindow):
         self.c_dup.setCurrentIndex(self.c_dup.findData(p.duplicados)); f1.addRow("Si el archivo ya existe", self.c_dup)
         cl.addWidget(g1)
 
+        gs = QGroupBox("Sesión (para contenido que pide iniciar sesión)"); fs = QFormLayout(gs)
+        aviso = QLabel("Inicia sesión en tu navegador como siempre y elígelo aquí: la aplicación usará esa sesión. "
+                       "No se guardan contraseñas. Si Chrome o Edge fallan, ciérralos por completo o prueba con Firefox.")
+        aviso.setWordWrap(True); aviso.setProperty("tenue", True); fs.addRow(aviso)
+        self.c_sesion = QComboBox(); self.c_sesion.addItem("Ninguna (sin iniciar sesión)", "ninguno")
+        for n in NAVEGADORES_SESION:
+            self.c_sesion.addItem(n.capitalize(), n)
+        self.c_sesion.setCurrentIndex(max(0, self.c_sesion.findData(p.sesion_navegador))); fs.addRow("Usar la sesión de", self.c_sesion)
+        self.c_cookies = QLineEdit(p.archivo_cookies); self.c_cookies.setPlaceholderText("Opcional: archivo cookies.txt (tiene prioridad)")
+        bc = _boton("Elegir…"); bc.clicked.connect(self._elegir_cookies)
+        fc = QHBoxLayout(); fc.addWidget(self.c_cookies, 1); fc.addWidget(bc); fs.addRow("Archivo de cookies", fc)
+        cl.addWidget(gs)
+
         g2 = QGroupBox("Calidad y formatos"); f2 = QFormLayout(g2)
         self.c_cont = QComboBox(); [self.c_cont.addItem(t, d) for t, d in [("MP4", "mp4"), ("MKV", "mkv"), ("El mejor disponible", "mejor")]]
         self.c_cont.setCurrentIndex(self.c_cont.findData(p.contenedor_video)); f2.addRow("Contenedor de video", self.c_cont)
@@ -579,6 +592,11 @@ class VentanaPrincipal(QMainWindow):
         pie = QHBoxLayout(); pie.addStretch(); pie.addWidget(guardar); lay.addLayout(pie)
         return w
 
+    def _elegir_cookies(self) -> None:
+        f, _ = QFileDialog.getOpenFileName(self, "Archivo de cookies", self.c_cookies.text(), "Cookies (*.txt);;Todos (*)")
+        if f:
+            self.c_cookies.setText(f)
+
     def _elegir_raiz(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Carpeta de descargas", self.c_raiz.text())
         if d:
@@ -596,6 +614,7 @@ class VentanaPrincipal(QMainWindow):
             reglas.validar_regla({"nombre": "x", "condicion": {"dominio": "x"}, "accion": {"subtitulos": list(idiomas)}})
         except ErrorGestor as e:
             QMessageBox.warning(self, "Idiomas no válidos", texto_error(e)); return
+        p.sesion_navegador, p.archivo_cookies = self.c_sesion.currentData(), self.c_cookies.text().strip()
         p.organizacion, p.duplicados = self.c_org.currentData(), self.c_dup.currentData()
         p.contenedor_video, p.formato_audio = self.c_cont.currentData(), self.c_aud.currentData()
         p.altura_max = int(self.c_alt.currentData()) if self.c_alt.currentData() else None

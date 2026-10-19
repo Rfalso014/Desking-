@@ -11,11 +11,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import drm, reglas
-from .config import Preferencias, localizar_deno
+from .config import Preferencias, localizar_deno, opciones_sesion
 from .db import BaseDatos
 from .descargador import Progreso, descargar, limpiar_carpeta_trabajo
 from .errores import traducir_excepcion
-from .extractor import obtener_info
+from .extractor import _extraer_con_ytdlp, obtener_info
 from .modelos import (ESTADOS_ACTIVOS, CodigoError, ErrorGestor, EstadoTarea, InfoContenido,
                       Tarea)
 from .organizador import organizar, sanear_nombre
@@ -109,7 +109,7 @@ class GestorCola:
         try:
             if not self._permitir_interno:
                 verificar_resolucion(t.url)
-            info = self._extraer(t.url, permitir_interno=self._permitir_interno)
+            info = self._consultar(t.url)
             d = None if info.es_lista else drm.evaluar(t.url, info)
         except Exception as exc:
             e = drm.enriquecer_error(t.url, exc if isinstance(exc, ErrorGestor) else traducir_excepcion(exc))
@@ -205,7 +205,7 @@ class GestorCola:
         try:
             if not self._permitir_interno:
                 verificar_resolucion(validar_url(url))
-            info = self._extraer(url, permitir_interno=self._permitir_interno)
+            info = self._consultar(url)
         except ErrorGestor as e:
             e = drm.enriquecer_error(url, e)
             raise e from None
@@ -254,13 +254,20 @@ class GestorCola:
         if d.exists():
             limpiar_carpeta_trabajo(d, self.prefs().carpeta_raiz / ".tmp")
 
+    def _consultar(self, url: str) -> InfoContenido:
+        """Consulta la URL con la sesión del navegador que el usuario haya elegido (si hay)."""
+        if self._extraer is obtener_info:
+            sesion = opciones_sesion(self.prefs())
+            return obtener_info(url, extraer=lambda u: _extraer_con_ytdlp(u, sesion), permitir_interno=self._permitir_interno)
+        return self._extraer(url, permitir_interno=self._permitir_interno)
+
     def _extraer_cancelable(self, url: str, ev: threading.Event) -> InfoContenido:
         """Consulta la URL sin quedarse colgado: si el usuario cancela, deja de esperar al sitio."""
         resultado: dict = {}
 
         def trabajo() -> None:
             try:
-                resultado["info"] = self._extraer(url, permitir_interno=self._permitir_interno)
+                resultado["info"] = self._consultar(url)
             except BaseException as exc:      # se re-lanza en el hilo que espera
                 resultado["error"] = exc
         h = threading.Thread(target=trabajo, name="analisis", daemon=True)

@@ -3,7 +3,7 @@
 // Todo el texto que viene de páginas externas se inserta como texto plano (textContent / nodos de texto).
 import {
   ESTADOS_ACTIVOS, ELEMENTOS_POR_DEFECTO, accionesDisponibles, construirOpciones, elementosDesdeOpciones, esUrlWeb, filtrarTareas,
-  formatearCodigo, formatearDuracion, formatearEta, formatearTamano, formatearVelocidad, miniaturaSegura, nombreNavegador, nombreSitio,
+  formatearCodigo, formatearDuracion, formatearEta, formatearTamano, formatearVelocidad, miniaturaSegura, nombreDeArchivo, nombreNavegador, nombreSitio, ordenarRecursos,
   resumenCola, ETIQUETA_ESTADO,
 } from "./util.js";
 
@@ -187,9 +187,9 @@ function detectarEnPagina() {
     if (m.currentSrc) anadir(tipo, m.currentSrc, document.title);
     m.querySelectorAll("source[src]").forEach((s) => anadir(tipo, s.src, document.title));
   });
-  document.querySelectorAll("img[src]").forEach((i) => { if ((i.naturalWidth || 0) >= 160) anadir("imagen", i.currentSrc || i.src, i.alt); });
+  document.querySelectorAll("img[src]").forEach((i) => { if ((i.naturalWidth || 0) >= 160) anadir("imagen", i.currentSrc || i.src, i.alt || i.title); });
   document.querySelectorAll("a[href]").forEach((a) => {
-    if (/\.(mp4|webm|mkv|mov|mp3|m4a|flac|ogg|opus|wav|jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(a.pathname)) anadir("enlace", a.href, a.textContent.trim());
+    if (/\.(mp4|webm|mkv|mov|mp3|m4a|flac|ogg|opus|wav|jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(a.pathname)) anadir("enlace", a.href, a.textContent.trim() || a.title || a.getAttribute("aria-label"));
   });
   return [...vistos.values()];
 }
@@ -203,7 +203,8 @@ async function buscarRecursos() {
   if (!tab || !esUrlWeb(tab.url)) { $("recursos-nota").textContent = ""; pintarRecursos(); return; }
   try {
     const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: false }, func: detectarEnPagina });
-    estado.recursos = res.result || [];
+    estado.recursos = ordenarRecursos(res.result || []);
+    estado.verImagenes = !estado.recursos.some((r) => r.tipo !== "imagen");   // si solo hay imágenes, se muestran
   } catch {
     $("recursos-nota").textContent = "El navegador no permite leer esta página.";
     return pintarRecursos();
@@ -214,31 +215,54 @@ async function buscarRecursos() {
   pintarRecursos();
 }
 
+/** Índices (en estado.recursos) de lo que se muestra: las imágenes quedan ocultas hasta que se pidan. */
+function indicesVisibles() {
+  return estado.recursos.map((r, i) => i).filter((i) => estado.verImagenes || estado.recursos[i].tipo !== "imagen");
+}
+
 function pintarRecursos() {
   const ul = $("recursos");
-  ul.replaceChildren(...estado.recursos.map((r, i) => el("li", { clase: "item" },
-    el("label", {}, el("input", { type: "checkbox", checked: estado.marcados.has(i),
-      onchange: (e) => { e.target.checked ? estado.marcados.add(i) : estado.marcados.delete(i); actualizarBarraRecursos(); } }),
-    el("div", { clase: "miniatura" }, GLIFO[r.tipo] || "↗"),
-    el("div", { clase: "cuerpo" }, el("div", { clase: "titulo" }, r.nombre || r.url),
-      el("div", { clase: "meta" }, `${r.tipo} · ${nombreSitio(r.url)}`), el("div", { clase: "meta" }, r.url))))));
-  $("contador-recursos").hidden = !estado.recursos.length;
-  $("contador-recursos").textContent = estado.recursos.length;
+  const visibles = indicesVisibles();
+  ul.replaceChildren(...visibles.map((i) => {
+    const r = estado.recursos[i];
+    const miniatura = el("div", { clase: "miniatura" }, GLIFO[r.tipo] || "↗");
+    if (r.tipo === "imagen" && miniaturaSegura(r.url)) miniatura.replaceChildren(el("img", { src: r.url, alt: "", loading: "lazy", referrerPolicy: "no-referrer" }));
+    const nombre = r.nombre || nombreDeArchivo(r.url);
+    return el("li", { clase: "item" },
+      el("label", {}, el("input", { type: "checkbox", checked: estado.marcados.has(i),
+        onchange: (e) => { e.target.checked ? estado.marcados.add(i) : estado.marcados.delete(i); actualizarBarraRecursos(); } }),
+      miniatura,
+      el("div", { clase: "cuerpo" }, el("div", { clase: "titulo" }, nombre),
+        el("div", { clase: "meta" }, `${r.tipo} · ${nombreSitio(r.url)}`))));
+  }));
+  const imagenes = estado.recursos.filter((r) => r.tipo === "imagen").length;
+  const otros = estado.recursos.length - imagenes;
+  $("btn-imagenes").hidden = !imagenes || !otros;
+  $("btn-imagenes").textContent = estado.verImagenes ? "Ocultar imágenes" : `Mostrar imágenes (${imagenes})`;
+  $("contador-recursos").hidden = !visibles.length;
+  $("contador-recursos").textContent = visibles.length;
   actualizarBarraRecursos();
 }
 
 function actualizarBarraRecursos() {
-  $("barra-recursos").hidden = !estado.recursos.length;
-  const n = estado.marcados.size;
+  const visibles = indicesVisibles();
+  $("barra-recursos").hidden = !visibles.length;
+  const n = [...estado.marcados].filter((i) => visibles.includes(i)).length;
   $("btn-descargar-sel").disabled = $("btn-enviar").disabled = !n;
   $("btn-descargar-sel").textContent = n ? `Descargar seleccionados (${n})` : "Descargar seleccionados";
-  $("btn-marcar").textContent = n === estado.recursos.length ? "Quitar marcas" : "Marcar todos";
+  $("btn-marcar").textContent = n === visibles.length ? "Quitar marcas" : "Marcar todos";
 }
 
 $("btn-buscar").addEventListener("click", buscarRecursos);
+$("btn-imagenes").addEventListener("click", () => {
+  estado.verImagenes = !estado.verImagenes;
+  if (!estado.verImagenes) estado.recursos.forEach((r, i) => { if (r.tipo === "imagen") estado.marcados.delete(i); });
+  pintarRecursos();
+});
 $("btn-marcar").addEventListener("click", () => {
-  if (estado.marcados.size === estado.recursos.length) estado.marcados.clear();
-  else estado.recursos.forEach((_, i) => estado.marcados.add(i));
+  const visibles = indicesVisibles();
+  if (visibles.every((i) => estado.marcados.has(i))) visibles.forEach((i) => estado.marcados.delete(i));
+  else visibles.forEach((i) => estado.marcados.add(i));
   pintarRecursos();
 });
 

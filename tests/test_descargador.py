@@ -121,3 +121,16 @@ def test_cancelacion(servidor_medios, tmp_path):
     with pytest.raises(ErrorGestor) as e:
         descargar(f"{servidor_medios.base}/clip.mp4", OP, tmp_path / "t", cancelar=ev, permitir_interno=True)
     assert e.value.codigo == CodigoError.CANCELADO
+
+
+def test_sesion_del_navegador_llega_a_yt_dlp(tmp_path):
+    from gestor.config import Preferencias, opciones_sesion
+    assert opciones_sesion(Preferencias()) == {}
+    assert opciones_sesion(Preferencias(sesion_navegador="firefox")) == {"cookiesfrombrowser": ("firefox",)}
+    assert opciones_sesion(Preferencias(sesion_navegador="notepad")) == {}
+    ck = tmp_path / "c.txt"; ck.write_text("# Netscape")
+    assert opciones_sesion(Preferencias(sesion_navegador="firefox", archivo_cookies=str(ck))) == {"cookiefile": str(ck)}
+    o = OpcionesDescarga(sesion={"cookiesfrombrowser": ("firefox",)})
+    assert construir_opciones_ytdlp(o, Path("x"), lambda d: None)["cookiesfrombrowser"] == ("firefox",)
+    with pytest.raises(ErrorGestor):
+        OpcionesDescarga(sesion={"exec": "calc"}).validar()

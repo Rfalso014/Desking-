@@ -92,7 +92,7 @@ def normalizar_info(info: dict[str, Any], url: str) -> InfoContenido:
 FuncionExtraer = Callable[[str], dict[str, Any]]
 
 
-def _extraer_con_ytdlp(url: str) -> dict[str, Any]:
+def _extraer_con_ytdlp(url: str, sesion: dict | None = None) -> dict[str, Any]:
     opciones = {
         "quiet": True,          # no imprimir en consola
         "no_warnings": True,
@@ -103,6 +103,7 @@ def _extraer_con_ytdlp(url: str) -> dict[str, Any]:
         "extract_flat": "in_playlist",
         "playlistend": MAX_VIDEOS_LISTA,
     }
+    opciones.update(sesion or {})
     deno = localizar_deno()
     if deno:
         opciones["js_runtimes"] = {"deno": {"path": str(deno)}}

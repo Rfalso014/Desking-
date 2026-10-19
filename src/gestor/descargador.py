@@ -9,7 +9,7 @@ import re
 import shutil
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -57,6 +57,7 @@ class OpcionesDescarga:
     fragmentos: int = 8                       # fragmentos que se bajan a la vez
     trozo_http: int = 10 * 1024 * 1024        # 0 = sin trozos
     deno: Path | None = None                  # runtime JS para YouTube
+    sesion: dict = field(default_factory=dict)   # cookies del navegador / cookies.txt (ver config.opciones_sesion)
 
     def validar(self) -> None:
         def malo(msg: str) -> ErrorGestor:
@@ -70,6 +71,8 @@ class OpcionesDescarga:
             raise malo(f"Contenedor de video no válido: {self.contenedor_video!r}.")
         if self.formato_audio not in FORMATOS_AUDIO:
             raise malo(f"Formato de audio no válido: {self.formato_audio!r}.")
+        if set(self.sesion) - {"cookiesfrombrowser", "cookiefile"}:
+            raise malo("Opciones de sesión no válidas.")
         if not (isinstance(self.fragmentos, int) and 1 <= self.fragmentos <= 32):
             raise malo("Los fragmentos simultáneos deben estar entre 1 y 32.")
         if not (isinstance(self.trozo_http, int) and 0 <= self.trozo_http <= 100 * 1024 * 1024):
@@ -147,6 +150,7 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
         p["http_chunk_size"] = o.trozo_http
     if o.deno:
         p["js_runtimes"] = {"deno": {"path": str(o.deno)}}
+    p.update(o.sesion)
     pp: list[dict[str, Any]] = p["postprocessors"]
 
     if o.modo in ("subtitulos", "portada"):
