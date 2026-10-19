@@ -46,6 +46,7 @@ class InfoContenido:
     autor: str | None = None
     es_en_vivo: bool = False
     es_lista: bool = False
+    entradas: tuple[tuple[str, str], ...] = ()   # (url, título) de cada video de una lista
     formatos: tuple[FormatoInfo, ...] = ()
     # idioma -> True si es automático. Ej: {"es": False, "en": True}
     subtitulos: dict[str, bool] = field(default_factory=dict)

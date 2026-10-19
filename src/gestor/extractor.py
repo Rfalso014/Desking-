@@ -18,6 +18,9 @@ from .errores import traducir_excepcion
 from .validacion import validar_url
 
 
+MAX_VIDEOS_LISTA = 500   # tope de videos que se toman de una lista
+
+
 def _tipo_de_formato(f: dict[str, Any]) -> TipoFormato:
     # yt-dlp escribe el texto "none" cuando una pista no existe.
     v, a = f.get("vcodec"), f.get("acodec")
@@ -60,6 +63,14 @@ def normalizar_info(info: dict[str, Any], url: str) -> InfoContenido:
     for idioma in (info.get("subtitles") or {}):
         subs[idioma] = False
 
+    entradas = []
+    for e in (info.get("entries") or []):
+        if not isinstance(e, dict):
+            continue
+        u = e.get("webpage_url") or e.get("url")
+        if isinstance(u, str) and u.startswith(("http://", "https://")):
+            entradas.append((u, e.get("title") or "Sin título"))
+
     return InfoContenido(
         url=info.get("webpage_url") or url,
         titulo=info.get("title") or "Sin título",
@@ -70,6 +81,7 @@ def normalizar_info(info: dict[str, Any], url: str) -> InfoContenido:
         autor=info.get("uploader") or info.get("channel"),
         es_en_vivo=bool(info.get("is_live")),
         es_lista=info.get("_type") in ("playlist", "multi_video"),
+        entradas=tuple(entradas),
         formatos=tuple(_formato(f) for f in (info.get("formats") or [])),
         subtitulos=subs,
     )
@@ -87,6 +99,9 @@ def _extraer_con_ytdlp(url: str) -> dict[str, Any]:
         "skip_download": True,  # SOLO consultar, nunca descargar
         "noplaylist": True,     # si la URL es de un video dentro de lista, solo ese video
         "socket_timeout": 20,
+        # En una lista solo se leen los títulos y enlaces (rápido); cada video se analiza al descargarlo.
+        "extract_flat": "in_playlist",
+        "playlistend": MAX_VIDEOS_LISTA,
     }
     deno = localizar_deno()
     if deno:

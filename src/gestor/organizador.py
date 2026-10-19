@@ -40,14 +40,18 @@ def confinar(ruta: Path, raiz: Path) -> Path:
 
 
 def carpeta_destino(prefs: Preferencias, rol: RolArchivo | str, titulo: str, *,
-                    carpeta_manual: Path | None = None, subcarpeta: str | None = None) -> Path:
+                    carpeta_manual: Path | None = None, subcarpeta: str | None = None,
+                    base: Path | None = None) -> Path:
     """Carpeta final para un archivo según la organización elegida.
 
-    `subcarpeta` viene de una regla del usuario (p. ej. "Cursos"): se añade bajo la raíz.
+    `subcarpeta` es la carpeta con nombre propio (de una regla o elegida por el usuario, p. ej. "Cursos"):
+    dentro quedan Videos, Musica, Subtitulos y Portadas. `base` es el lugar elegido para guardar; sin él
+    se usa la carpeta de descargas predeterminada.
     """
     if prefs.organizacion not in ORGANIZACIONES:
         raise ErrorGestor(CodigoError.CONFIGURACION, f"Organización no válida: {prefs.organizacion!r}.")
-    raiz = prefs.carpeta_raiz
+    base = base or prefs.carpeta_raiz
+    raiz = base
     if subcarpeta:
         raiz = raiz / sanear_nombre(subcarpeta)
     if prefs.organizacion == "manual":
@@ -60,9 +64,11 @@ def carpeta_destino(prefs: Preferencias, rol: RolArchivo | str, titulo: str, *,
         destino = raiz / tipo
     elif prefs.organizacion == "contenido":
         destino = raiz / contenido
+    elif subcarpeta:   # la carpeta ya agrupa el contenido: dentro solo se separa por tipo
+        destino = raiz / tipo
     else:  # tipo_y_contenido: el tipo lo decide el archivo PRINCIPAL; el resto va junto
         destino = raiz / tipo / contenido
-    return confinar(destino, prefs.carpeta_raiz)
+    return confinar(destino, base)
 
 
 def _hash(ruta: Path) -> str:
@@ -116,13 +122,14 @@ def colocar_archivo(origen: Path, carpeta: Path, nombre: str, politica: str) -> 
 
 
 def organizar(archivos: tuple[ArchivoDescargado, ...], prefs: Preferencias, titulo: str, *,
-              carpeta_manual: Path | None = None, subcarpeta: str | None = None) -> list[Colocado]:
+              carpeta_manual: Path | None = None, subcarpeta: str | None = None,
+              base: Path | None = None) -> list[Colocado]:
     """Mueve todos los archivos de una tarea a su destino final."""
     principal = next((a for a in archivos if a.rol in (RolArchivo.VIDEO, RolArchivo.AUDIO)), archivos[0])
     resultados = []
     for a in archivos:
         # Con organización "contenido" o "tipo_y_contenido" todo va junto (carpeta del principal).
         rol_carpeta = principal.rol if prefs.organizacion in ("contenido", "tipo_y_contenido") else a.rol
-        destino = carpeta_destino(prefs, rol_carpeta, titulo, carpeta_manual=carpeta_manual, subcarpeta=subcarpeta)
+        destino = carpeta_destino(prefs, rol_carpeta, titulo, carpeta_manual=carpeta_manual, subcarpeta=subcarpeta, base=base)
         resultados.append(colocar_archivo(a.ruta, destino, a.ruta.name, prefs.duplicados))
     return resultados

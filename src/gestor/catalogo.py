@@ -13,6 +13,7 @@ _IDIOMA = re.compile(r"^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?$")
 
 def _ok_altura(v): return v is None or (isinstance(v, int) and not isinstance(v, bool) and 100 <= v <= 8640)
 def _ok_idiomas(v): return isinstance(v, (list, tuple)) and len(v) <= 20 and all(isinstance(i, str) and _IDIOMA.match(i) for i in v)
+def _ok_destino(v): return v is None or (isinstance(v, str) and 0 < len(v) <= 260 and "\x00" not in v)
 def _ok_bool(v): return isinstance(v, bool)
 def _ok_subcarpeta(v): return v is None or (isinstance(v, str) and 0 < len(v) <= 80)
 
@@ -26,5 +27,6 @@ CAMPOS_ACCION = {
     "subtitulos": _ok_idiomas,
     "portada": _ok_bool,
     "subcarpeta": _ok_subcarpeta,
+    "destino": _ok_destino,
     "excluir": _ok_bool,
 }

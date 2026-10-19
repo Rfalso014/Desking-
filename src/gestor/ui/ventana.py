@@ -17,7 +17,7 @@ from ..nativo import instalador
 from ..organizador import ORGANIZACIONES, POLITICAS
 from ..validacion import validar_url
 from ..vinculacion import Vinculacion
-from .dialogos import FORMATOS_AUDIO, AnalisisDialog, DialogoElementos, ReglaDialog, SelectorElementos, texto_error
+from .dialogos import FORMATOS_AUDIO, AnalisisDialog, DialogoElementos, ReglaDialog, SelectorDestino, SelectorElementos, texto_error
 from .estilo import hoja_de_estilos, paleta
 from .formatos import formato_cuenta_atras, formato_velocidad
 from .tarjeta import ETIQUETA, Miniaturas, TarjetaTarea
@@ -183,6 +183,8 @@ class VentanaPrincipal(QMainWindow):
         titulo_sel = QLabel("¿Qué quieres descargar?"); titulo_sel.setProperty("seccion", True); c.addWidget(titulo_sel)
         self.selector = SelectorElementos(self.db.cargar_preferencias())
         c.addWidget(self.selector)
+        self.destino = SelectorDestino(self.db.cargar_preferencias())
+        c.addWidget(self.destino)
         self.sugerencia = QFrame(); self.sugerencia.setObjectName("caja"); self.sugerencia.hide()
         sl = QHBoxLayout(self.sugerencia); sl.setContentsMargins(12, 8, 12, 8)
         self.texto_sugerencia = QLabel(); sl.addWidget(self.texto_sugerencia, 1)
@@ -215,7 +217,7 @@ class VentanaPrincipal(QMainWindow):
 
     def _anadir(self) -> None:
         try:
-            for opciones in self.selector.opciones():        # video + audio marcados = dos descargas
+            for opciones in self.destino.aplicar(self.selector.opciones()):        # video + audio marcados = dos descargas
                 self.cola.encolar(self.url.text(), opciones=opciones)
             self.url.clear()
             self.statusBar().showMessage("Añadida a la cola", 3000)

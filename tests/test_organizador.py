@@ -108,3 +108,17 @@ def test_organizar_por_tipo_separa(tmp_path):
                 ArchivoDescargado(_archivo(tmp, "v.jpg", b"p"), RolArchivo.PORTADA))
     organizar(archivos, replace(Preferencias(carpeta_raiz=tmp_path / "r"), organizacion="tipo"), "x")
     assert (tmp_path / "r" / "Videos" / "v.mp4").exists() and (tmp_path / "r" / "Portadas" / "v.jpg").exists()
+
+
+def test_carpeta_elegida_separa_por_tipo_en_el_lugar_elegido(tmp_path):
+    p = Preferencias(carpeta_raiz=tmp_path / "defecto")
+    otro = tmp_path / "otro"
+    for rol, sub in ((RolArchivo.VIDEO, "Videos"), (RolArchivo.AUDIO, "Musica"),
+                     (RolArchivo.SUBTITULO, "Subtitulos"), (RolArchivo.PORTADA, "Portadas")):
+        assert carpeta_destino(p, rol, "titulo", subcarpeta="Curso", base=otro) == otro.resolve() / "Curso" / sub
+
+
+def test_carpeta_con_nombre_malicioso_no_sale_del_lugar_elegido(tmp_path):
+    p = Preferencias(carpeta_raiz=tmp_path)
+    d = carpeta_destino(p, RolArchivo.VIDEO, "x", subcarpeta=r"..\..\Windows", base=tmp_path / "otro")
+    assert (tmp_path / "otro").resolve() in d.parents

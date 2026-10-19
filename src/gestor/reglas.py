@@ -68,6 +68,11 @@ class Resolucion:
     explicacion: dict[str, str] = field(default_factory=dict)   # campo -> origen
     reglas_aplicadas: list[str] = field(default_factory=list)
 
+    @property
+    def destino(self) -> str | None:
+        """Carpeta base elegida para esta descarga (None = la carpeta de descargas predeterminada)."""
+        return self.campos.get("destino")
+
     def a_opciones(self, prefs: Preferencias, ffmpeg_dir: Path | None, deno: Path | None = None) -> OpcionesDescarga:
         c = self.campos
         fragmentos, trozo = PERFILES_VELOCIDAD.get(prefs.velocidad, PERFILES_VELOCIDAD["rapida"])
@@ -87,7 +92,7 @@ def resolver(url: str, sitio: str | None, reglas: list[dict], prefs: Preferencia
         "modo": "video", "altura_max": prefs.altura_max, "contenedor_video": prefs.contenedor_video,
         "formato_audio": prefs.formato_audio,
         "subtitulos": list(prefs.idiomas_subtitulos) if prefs.descargar_subtitulos else [],
-        "portada": prefs.descargar_portada, "subcarpeta": None, "excluir": False,
+        "portada": prefs.descargar_portada, "subcarpeta": None, "destino": None, "excluir": False,
     }
     origen = {k: "preferencias globales" for k in campos}
     aplicadas: list[str] = []

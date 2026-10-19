@@ -18,7 +18,7 @@ from .errores import traducir_excepcion
 from .extractor import obtener_info
 from .modelos import (ESTADOS_ACTIVOS, CodigoError, ErrorGestor, EstadoTarea, InfoContenido,
                       Tarea)
-from .organizador import organizar
+from .organizador import organizar, sanear_nombre
 from .validacion import validar_url, verificar_resolucion
 
 _INTERVALO_PROGRESO = 0.5   # segundos mínimos entre escrituras de progreso a la base de datos
@@ -110,7 +110,7 @@ class GestorCola:
             if not self._permitir_interno:
                 verificar_resolucion(t.url)
             info = self._extraer(t.url, permitir_interno=self._permitir_interno)
-            d = drm.evaluar(t.url, info)
+            d = None if info.es_lista else drm.evaluar(t.url, info)
         except Exception as exc:
             e = drm.enriquecer_error(t.url, exc if isinstance(exc, ErrorGestor) else traducir_excepcion(exc))
             t = self.db.obtener_tarea(id_)
@@ -123,7 +123,11 @@ class GestorCola:
         if t is None or t.estado != EstadoTarea.DETECTADO:
             return                                   # mientras tanto se inició o se eliminó
         t.titulo, t.sitio, t.miniatura, t.duracion = info.titulo, info.sitio, info.miniatura_url, info.duracion_seg
-        t.notas = [d.motivo] if d.nivel != drm.Compatibilidad.COMPATIBLE else []
+        if info.es_lista:
+            t.titulo = f"Lista: {info.titulo} ({len(info.entradas)} videos)"
+            t.notas = ["Es una lista de reproducción: al descargarla se agrega cada video a la cola."]
+        else:
+            t.notas = [d.motivo] if d.nivel != drm.Compatibilidad.COMPATIBLE else []
         self._publicar(t)
 
     def encolar(self, url: str, *, origen: str | None = None, opciones: dict | None = None,
@@ -242,6 +246,55 @@ class GestorCola:
         if d.exists():
             limpiar_carpeta_trabajo(d, self.prefs().carpeta_raiz / ".tmp")
 
+    def _extraer_cancelable(self, url: str, ev: threading.Event) -> InfoContenido:
+        """Consulta la URL sin quedarse colgado: si el usuario cancela, deja de esperar al sitio."""
+        resultado: dict = {}
+
+        def trabajo() -> None:
+            try:
+                resultado["info"] = self._extraer(url, permitir_interno=self._permitir_interno)
+            except BaseException as exc:      # se re-lanza en el hilo que espera
+                resultado["error"] = exc
+        h = threading.Thread(target=trabajo, name="analisis", daemon=True)
+        h.start()
+        while h.is_alive():
+            h.join(0.2)
+            if ev.is_set():
+                raise ErrorGestor(CodigoError.CANCELADO, "Cancelada.")
+        if "error" in resultado:
+            raise resultado["error"]
+        return resultado["info"]
+
+    def _expandir_lista(self, t: Tarea, info: InfoContenido) -> None:
+        """Una lista de reproducción se convierte en una descarga por video, todas en una misma carpeta."""
+        if not info.entradas:
+            raise ErrorGestor(CodigoError.CONTENIDO_NO_DISPONIBLE, "La lista no tiene videos que se puedan descargar.",
+                              solucion="Comprueba que la lista sea pública y no esté vacía.")
+        carpeta = sanear_nombre(info.titulo, maximo=80)
+        opciones = {"subcarpeta": carpeta, **t.opciones}      # lo que el usuario eligió prevalece
+        ya = {x.url for x in self.db.listar_tareas(estados=[EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS])
+              if x.opciones == opciones}
+        nuevas = []
+        for url, titulo in info.entradas:
+            try:
+                url = validar_url(url, permitir_interno=self._permitir_interno)
+            except ErrorGestor:
+                continue
+            if url in ya:
+                continue
+            h = self.db.crear_tarea(url, origen=t.origen, opciones=dict(opciones),
+                                    destino_manual=t.destino_manual)
+            h.titulo = titulo
+            self.db.guardar_tarea(h)
+            nuevas.append(h)
+        t.titulo = f"Lista: {info.titulo}"
+        t.estado, t.progreso = EstadoTarea.COMPLETADO, 100.0
+        t.notas = [f"Lista de {len(nuevas)} videos agregada a la cola; se guardan en la carpeta «{carpeta}»."]
+        self._publicar(t)
+        for h in nuevas:
+            self._publicar(h)
+            self._cola.put(h.id)
+
     def _bucle(self) -> None:
         while True:
             id_ = self._cola.get()
@@ -271,8 +324,11 @@ class GestorCola:
             self._publicar(t)
             if not self._permitir_interno:
                 verificar_resolucion(t.url)
-            info = self._extraer(t.url, permitir_interno=self._permitir_interno)
+            info = self._extraer_cancelable(t.url, ev)
             t.titulo, t.sitio, t.miniatura, t.duracion = info.titulo, info.sitio, info.miniatura_url, info.duracion_seg
+            if info.es_lista:
+                self._expandir_lista(t, info)
+                return
 
             res = reglas.resolver(t.url, info.sitio, self.db.listar_reglas(solo_activas=True), prefs, t.opciones)
             t.notas = [*(f"Regla aplicada: {n}" for n in res.reglas_aplicadas)]
@@ -314,7 +370,8 @@ class GestorCola:
             self._publicar(t)
             manual = Path(t.destino_manual) if t.destino_manual else None
             colocados = organizar(resultado.archivos, prefs, t.titulo or "Sin título",
-                                  carpeta_manual=manual, subcarpeta=res.subcarpeta)
+                                  carpeta_manual=manual, subcarpeta=res.subcarpeta,
+                                  base=Path(res.destino).expanduser() if res.destino else None)
             rutas = [c.ruta for c in colocados if c.ruta]
             t.archivos = [str(r) for r in rutas]
             t.carpeta_final = str(rutas[0].parent) if rutas else None

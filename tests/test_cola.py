@@ -215,3 +215,41 @@ def test_un_enlace_detectado_nunca_se_descarga_sin_autorizacion(entorno):
     cola.iniciar_detectada(t.id)
     assert cola.obtener(t.id).opciones == {"modo": "audio"}
     assert esperar(cola, t.id, FINALES).estado == EstadoTarea.ERROR     # llegó a intentarlo SOLO tras la orden
+
+
+def _info(**kw):
+    return InfoContenido(url="https://a.test/x", titulo="Mi lista", sitio="Youtube", **kw)
+
+
+def test_lista_se_expande_en_un_video_por_tarea(tmp_path):
+    db = BaseDatos(":memory:")
+    db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
+    entradas = (("https://a.test/1", "Uno"), ("https://a.test/2", "Dos"))
+    cola = GestorCola(db, extraer=lambda u, **k: _info(es_lista=True, entradas=entradas),
+                      descargar_fn=lambda *a, **k: (_ for _ in ()).throw(ErrorGestor(CodigoError.CONEXION, "x")),
+                      permitir_interno=True)
+    cola.iniciar(hilos=1)
+    try:
+        t = cola.encolar("https://a.test/lista", opciones={"modo": "audio"})
+        f = esperar(cola, t.id, FINALES)
+        assert f.estado == EstadoTarea.COMPLETADO and "2 videos" in f.notas[0]
+        hijas = [x for x in cola.listar() if x.id != t.id]
+        assert {h.url for h in hijas} == {u for u, _ in entradas}
+        assert all(h.opciones == {"subcarpeta": "Mi lista", "modo": "audio"} for h in hijas)
+    finally:
+        cola.detener(); db.cerrar()
+
+
+def test_cancelar_mientras_analiza_no_se_cuelga(tmp_path):
+    db = BaseDatos(":memory:")
+    db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
+    liberar = threading.Event()
+    cola = GestorCola(db, extraer=lambda u, **k: (liberar.wait(30), _info())[1], permitir_interno=True)
+    cola.iniciar(hilos=1)
+    try:
+        t = cola.encolar("https://a.test/lenta")
+        esperar(cola, t.id, (EstadoTarea.ANALIZANDO,))
+        cola.cancelar(t.id)
+        assert esperar(cola, t.id, FINALES, t=5).estado == EstadoTarea.CANCELADO
+    finally:
+        liberar.set(); cola.detener(); db.cerrar()

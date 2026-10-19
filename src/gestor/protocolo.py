@@ -96,7 +96,7 @@ def validar_mensaje(msg: Any) -> dict:
         if not isinstance(op, dict):
             raise _malo("'opciones' debe ser un objeto.")
         for k, v in op.items():
-            if k not in CAMPOS_ACCION or k == "excluir" or not CAMPOS_ACCION[k](v):
+            if k not in CAMPOS_ACCION or k in ("excluir", "destino") or not CAMPOS_ACCION[k](v):
                 raise _malo(f"Opción no válida: {k!r}.")
         limpio["opciones"] = op
     if "codigo" in datos:

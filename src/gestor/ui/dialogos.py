@@ -1,6 +1,10 @@
 """Diálogos: crear/editar una regla y mostrar el análisis de un enlace."""
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QMessageBox, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGridLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
+                               QVBoxLayout, QWidget)
 
 from .. import reglas
 from ..config import Preferencias
@@ -109,12 +113,19 @@ class AnalisisDialog(QDialog):
         self.resize(520, 380)
         alturas = sorted({f.altura for f in info.formatos if f.altura}, reverse=True)
         subs = [k + (" (auto)" if auto else "") for k, auto in info.subtitulos.items()]
-        txt = [f"Título: {info.titulo}", f"Sitio: {info.sitio}", f"Autor: {info.autor or '-'}",
+        txt = ([f"Es una lista de reproducción con {len(info.entradas)} videos.",
+                "Al descargarla, cada video se agrega a la cola y se guarda en una carpeta con el nombre de la lista.", ""]
+               if info.es_lista else [])
+        txt += [f"Título: {info.titulo}", f"Sitio: {info.sitio}", f"Autor: {info.autor or '-'}",
                f"Duración: {int(info.duracion_seg)} s" if info.duracion_seg else "Duración: -",
                f"Calidades: {', '.join(f'{a}p' for a in alturas) or 'no informadas'}",
                f"Formatos disponibles: {len(info.formatos)}", f"Subtítulos: {', '.join(subs) or 'ninguno'}", "",
                f"Compatibilidad: {diag.nivel.value.replace('_', ' ')} ({diag.confianza.value})", diag.motivo]
         txt += [f"Alternativa: {a}" for a in diag.alternativas]
+        if info.es_lista:
+            txt += ["", "Videos de la lista:", *(f"  {i}. {t}" for i, (_u, t) in enumerate(info.entradas[:50], 1))]
+            if len(info.entradas) > 50:
+                txt.append(f"  … y {len(info.entradas) - 50} más")
         caja = QPlainTextEdit("\n".join(txt)); caja.setReadOnly(True)
         botones = QDialogButtonBox(QDialogButtonBox.Close); botones.rejected.connect(self.reject)
         lay = QVBoxLayout(self); lay.addWidget(QLabel("Esto es lo que ofrece el enlace:")); lay.addWidget(caja)
@@ -123,6 +134,39 @@ class AnalisisDialog(QDialog):
 
 CALIDADES_SELECTOR = [("Según mi configuración", ""), ("La mejor", "mejor"), ("1080p", "1080"), ("720p", "720"), ("480p", "480")]
 AUDIOS_SELECTOR = [("MP3", "mp3"), ("M4A", "m4a"), ("FLAC", "flac"), ("OGG", "ogg"), ("OPUS", "opus"), ("WAV", "wav"), ("Pista original", "original")]
+
+
+class SelectorDestino(QWidget):
+    """«Dónde guardar»: nombre de una carpeta (dentro quedan Videos, Musica, Subtitulos…) y el lugar donde crearla."""
+
+    def __init__(self, prefs: Preferencias | None = None, parent=None):
+        super().__init__(parent)
+        self._defecto = (prefs or Preferencias()).carpeta_raiz
+        self.carpeta = QLineEdit(); self.carpeta.setMaximumWidth(220); self.carpeta.setClearButtonEnabled(True)
+        self.carpeta.setPlaceholderText("Nombre de carpeta (opcional)")
+        self.carpeta.setToolTip("Si escribes un nombre, se crea esa carpeta y dentro se separan Videos, Musica, Subtitulos y Portadas.")
+        self.lugar = QLineEdit(); self.lugar.setReadOnly(True)
+        self.lugar.setPlaceholderText(f"Predeterminado: {self._defecto}")
+        self.lugar.setToolTip("Dónde se crea la carpeta. Vacío = la carpeta de descargas de la Configuración.")
+        elegir = QPushButton("Elegir lugar…"); elegir.setCursor(Qt.PointingHandCursor); elegir.clicked.connect(self._elegir)
+        quitar = QPushButton("Predeterminado"); quitar.setCursor(Qt.PointingHandCursor); quitar.clicked.connect(lambda: self.lugar.clear())
+        fila = QHBoxLayout(); fila.setContentsMargins(0, 0, 0, 0); fila.setSpacing(8)
+        l = QLabel("Guardar en"); l.setProperty("tenue", True)
+        for w in (l, self.carpeta, self.lugar, elegir, quitar):
+            fila.addWidget(w)
+        fila.setStretch(2, 1)
+        self.setLayout(fila)
+
+    def _elegir(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, "¿Dónde guardar?", self.lugar.text() or str(self._defecto))
+        if d:
+            self.lugar.setText(d)
+
+    def aplicar(self, lista: list[dict]) -> list[dict]:
+        """Añade la carpeta y el lugar elegidos a cada descarga (si no eligió nada, no cambia nada)."""
+        nombre, lugar = self.carpeta.text().strip(), self.lugar.text().strip()
+        extra = {**({"subcarpeta": nombre} if nombre else {}), **({"destino": lugar} if lugar else {})}
+        return [{**o, **extra} for o in lista]
 
 
 class SelectorElementos(QWidget):
@@ -187,16 +231,17 @@ class DialogoElementos(QDialog):
         self.setWindowTitle("¿Qué quieres descargar?")
         self.resultado: list[dict] | None = None
         self.selector = SelectorElementos(prefs, inicial)
+        self.destino = SelectorDestino(prefs)
         t = QLabel(titulo); t.setWordWrap(True); t.setProperty("seccion", True)
         botones = QDialogButtonBox(); ok = botones.addButton("Descargar", QDialogButtonBox.AcceptRole); ok.setProperty("primary", True)
         botones.addButton("Cancelar", QDialogButtonBox.RejectRole)
         botones.accepted.connect(self._aceptar); botones.rejected.connect(self.reject)
-        lay = QVBoxLayout(self); lay.setSpacing(12); lay.addWidget(t); lay.addWidget(self.selector); lay.addWidget(botones)
-        self.setMinimumWidth(560)
+        lay = QVBoxLayout(self); lay.setSpacing(12); lay.addWidget(t); lay.addWidget(self.selector); lay.addWidget(self.destino); lay.addWidget(botones)
+        self.setMinimumWidth(760)
 
     def _aceptar(self) -> None:
         try:
-            self.resultado = self.selector.opciones()
+            self.resultado = self.destino.aplicar(self.selector.opciones())
         except ErrorGestor as e:
             QMessageBox.warning(self, "Revisa lo que marcaste", texto_error(e)); return
         self.accept()

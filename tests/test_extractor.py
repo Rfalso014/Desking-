@@ -132,3 +132,13 @@ def test_yt_dlp_real_contra_servidor_local(servidor_local):
     r = obtener_info(servidor_local, permitir_interno=True)
     assert r.formatos, "yt-dlp debería ver al menos un formato del enlace directo"
     assert r.formatos[0].extension == "mp4"
+
+
+def test_lista_trae_sus_videos():
+    info = {"_type": "playlist", "title": "Mi lista", "entries": [
+        {"url": "https://www.youtube.com/watch?v=a", "title": "Uno"},
+        {"webpage_url": "https://www.youtube.com/watch?v=b"},
+        {"url": "javascript:alert(1)", "title": "malo"}, None]}
+    r = normalizar_info(info, "u")
+    assert r.es_lista and r.entradas == (("https://www.youtube.com/watch?v=a", "Uno"),
+                                         ("https://www.youtube.com/watch?v=b", "Sin título"))
