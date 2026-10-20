@@ -4,13 +4,19 @@ GESTOR DE DESCARGAS - Instalación (Windows)
 La aplicación (GestorDescargas.exe) es la que descarga. La extensión del navegador solo detecta videos y le manda
 órdenes a la aplicación («Descargar», «Cancelar», «Eliminar»).
 
-1. Descomprime esta carpeta donde quieras (por ejemplo C:\Gestor). No la muevas después de instalar.
+1. Instalar (elige una):
+   a) Instalador (recomendado): ejecuta GestorDescargas-<versión>-instalador.exe. No pide administrador,
+      se instala en %LOCALAPPDATA%\Programs\GestorDescargas, crea accesos directos y registra solo la
+      conexión con Chrome y Edge. Puedes marcar "Iniciar con Windows en segundo plano".
+   b) Versión portátil (.zip): descomprime la carpeta donde quieras (por ejemplo C:\Gestor) y no la muevas después.
 
 2. Abre GestorDescargas.exe y entra en la pestaña "Extensión".
-   Paso 1: pulsa "Instalar conexión" (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host ).
+   Paso 1 (solo en la versión portátil; el instalador ya lo hace): pulsa "Instalar conexión"
+   (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host ).
 
 3. Paso 2: en Chrome o Edge abre chrome://extensions (o edge://extensions), activa "Modo de desarrollador",
-   pulsa "Cargar descomprimida" y elige la carpeta "extension" de esta instalación.
+   pulsa "Cargar descomprimida" y elige la carpeta "extension" de esta instalación
+   (con el instalador: menú Inicio > Gestor de Descargas > "Carpeta de la extensión del navegador").
    El ID de la extensión es fijo y es el único autorizado por la conexión.
 
 4. Paso 3 (vincular): la pestaña "Extensión" de la aplicación muestra un CÓDIGO de 8 caracteres (ej. K7M2-9QXA).
@@ -34,6 +40,9 @@ Notas
 - Deno viene en tools\deno: yt-dlp lo usa para YouTube y otros sitios que lo requieren.
 - Velocidad: Configuración > Velocidad (Normal / Rápida / Máxima). Descarga varios fragmentos a la vez.
 - Las galerías de imágenes (gallery-dl) solo funcionan en la versión de desarrollo con Python.
-- Desinstalar: GestorDescargas.exe --desinstalar-host, y borra la carpeta. Los datos están en %USERPROFILE%\.gestor-descargas.
+- Desinstalar: con el instalador, desde Configuración de Windows > Aplicaciones (quita también la conexión
+  y el inicio con Windows). En la portátil: GestorDescargas.exe --limpiar-sistema y borra la carpeta.
+  Tus datos (historial, ajustes) quedan en %USERPROFILE%\.gestor-descargas; bórrala si no los quieres.
 - Actualizar yt-dlp: los sitios cambian a menudo. En la versión con Python: scripts\actualizar_ytdlp.py.
-  En la versión empaquetada hay que descargar una versión nueva del programa.
+  En la versión empaquetada: Configuración > Acerca de > "Buscar actualizaciones" y descarga el instalador nuevo
+  (se instala encima, sin perder tus datos).

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComb
                                QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .. import reglas
+from .. import __version__, actualizaciones, reglas
 from ..cola import GestorCola
 from ..config import NAVEGADORES_SESION, RAIZ_PROYECTO, localizar_deno, localizar_ffmpeg
 from ..modelos import ESTADOS_ACTIVOS, ErrorGestor, EstadoTarea, Tarea
@@ -36,6 +36,7 @@ class Puente(QObject):
     """Lleva avisos desde los hilos de trabajo al hilo de la interfaz (Qt lo exige)."""
     cambio = Signal(dict)
     analisis = Signal(object, object)   # (resultado | None, error | None)
+    version = Signal(object, object)    # (release | None, error | None)
 
 
 def _tabla(columnas: list[str]) -> QTableWidget:
@@ -102,6 +103,7 @@ class VentanaPrincipal(QMainWindow):
         self.puente = Puente()
         self.puente.cambio.connect(self._programar_refresco)
         self.puente.analisis.connect(self._mostrar_analisis)
+        self.puente.version.connect(self._mostrar_version)
         cola.suscribir(self.puente.cambio.emit)
         self.miniaturas = Miniaturas(self)
         self.miniaturas.lista.connect(lambda _u: self._programar_refresco({}))
@@ -153,7 +155,7 @@ class VentanaPrincipal(QMainWindow):
         f = QFrame(); f.setObjectName("lateral"); f.setFixedWidth(230)
         lay = QVBoxLayout(f); lay.setContentsMargins(14, 20, 14, 14); lay.setSpacing(4)
         marca = QLabel("⬇ Gestor de\nDescargas"); marca.setObjectName("marca")
-        sub = QLabel("Video, audio, subtítulos\ne imágenes"); sub.setObjectName("submarca")
+        sub = QLabel(f"Video, audio, subtítulos\ne imágenes · v{__version__}"); sub.setObjectName("submarca")
         lay.addWidget(marca); lay.addWidget(sub); lay.addSpacing(18)
         self._nav = {}
         grupo = QButtonGroup(self); grupo.setExclusive(True)
@@ -599,7 +601,14 @@ class VentanaPrincipal(QMainWindow):
         for texto, fn in [("Instalar conexión con el navegador", self._instalar_host), ("Quitar conexión", self._quitar_host)]:
             x = _boton(texto); x.clicked.connect(fn); bh.addWidget(x)
         bh.addStretch(); f4.addRow("Navegador", bh)
-        cl.addWidget(g4); cl.addStretch()
+        cl.addWidget(g4)
+
+        g5 = QGroupBox("Acerca de"); f5 = QFormLayout(g5)
+        self.estado_version = QLabel(f"Versión {__version__}"); self.estado_version.setWordWrap(True)
+        self.b_version = _boton("Buscar actualizaciones", tip="Consulta GitHub; no descarga nada por su cuenta")
+        self.b_version.clicked.connect(self._buscar_actualizaciones)
+        fv = QHBoxLayout(); fv.addWidget(self.estado_version, 1); fv.addWidget(self.b_version); f5.addRow("Programa", fv)
+        cl.addWidget(g5); cl.addStretch()
         area = QScrollArea(); area.setWidgetResizable(True); area.setFrameShape(QFrame.NoFrame); area.setWidget(contenido)
         lay.addWidget(area, 1)
         guardar = _boton("Guardar configuración", primario=True); guardar.clicked.connect(self._guardar_config)
@@ -666,3 +675,26 @@ class VentanaPrincipal(QMainWindow):
 
     def _quitar_host(self) -> None:
         instalador.desinstalar(); self._actualizar_estado_sistema()
+
+    def _buscar_actualizaciones(self) -> None:
+        self.b_version.setEnabled(False); self.estado_version.setText(f"Versión {__version__} · buscando…")
+
+        def trabajo():
+            try:
+                self.puente.version.emit(actualizaciones.buscar(), None)
+            except Exception as e:        # sin conexión, límite de la API, respuesta rara…
+                self.puente.version.emit(None, e)
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _mostrar_version(self, release, error) -> None:
+        self.b_version.setEnabled(True)
+        if error is not None:
+            self.estado_version.setText(f"Versión {__version__} · no se pudo comprobar (¿sin conexión?)")
+        elif not release["nueva"]:
+            self.estado_version.setText(f"Versión {__version__} · es la más reciente")
+        else:
+            self.estado_version.setText(f"Versión {__version__} · hay una nueva: {release['version']}")
+            if QMessageBox.question(self, "Hay una versión nueva",
+                                    f"Está disponible la versión {release['version']} (tienes la {__version__}).\n\n"
+                                    "¿Abrir la página de descarga?") == QMessageBox.Yes:
+                QDesktopServices.openUrl(QUrl(release["url"]))

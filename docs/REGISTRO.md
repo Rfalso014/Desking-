@@ -59,7 +59,7 @@
 - Formatos HLS sin códecs informados aparecen como «desconocido».
 - Sin firma de código: Windows SmartScreen/antivirus pueden advertir sobre los .exe.
 - Actualizaciones: manuales (`scripts/actualizar_ytdlp.py` en desarrollo; versión nueva del zip en la empaquetada).
-- Sin instalador (Inno Setup/MSI): se distribuye un zip con `--instalar-host`.
+- ~~Sin instalador~~: resuelto en 1.0.0 (Inno Setup, ver abajo).
 
 ## Trampa encontrada (2026-10-16)
 - El Python de la Microsoft Store redirige las escrituras en %LOCALAPPDATA% a una carpeta oculta (LocalCache). Chrome no veia el manifiesto del host. Los datos de la app ahora viven en %USERPROFILE%\.gestor-descargas.
@@ -74,3 +74,13 @@
 - Aplicación: barra lateral, tarjetas por descarga (miniatura, estado, progreso, velocidad, ETA, errores con causa/solución), filtros, tema claro/oscuro/automático, página «Extensión» con el código de vinculación, sugerencia al copiar un enlace.
 - Extensión: pestañas Esta página / Cola / Ajustes, análisis con compatibilidad, recursos detectados con selección múltiple, cola con filtros y búsqueda, ajustes (botón flotante, valores por defecto, desvincular).
 - Verificado: popup en un navegador con la API de Chrome simulada; ventana de la app con capturas reales (claro y oscuro). NO verificado: la extensión cargada en un Chrome real con YouTube.
+
+## Versión 1.0.0: instalador y releases (2026-10-20)
+- Instalador por usuario con Inno Setup 6 (`instalador/GestorDescargas.iss`): sin administrador, `%LOCALAPPDATA%\Programs\GestorDescargas`,
+  registra el host al instalar (`--instalar-host`), tarea opcional de inicio con Windows (mismo valor de registro que la app),
+  cierra la app antes de actualizar y al desinstalar ejecuta `--limpiar-sistema` (host + inicio con Windows). Los datos del usuario se conservan.
+- Los .exe llevan icono y ficha de versión (`scripts/preparar_recursos.py`).
+- Paquete más ligero: se quitan piezas de Qt que una app de Widgets no usa (OpenGL por software, Qt Quick/QML del teclado virtual, PDF, traducciones).
+- «Buscar actualizaciones» (Configuración → Acerca de) consulta la API de GitHub Releases; solo informa y abre la página, nunca descarga ni instala solo.
+  Si el repositorio es privado, la API responde 404 y la app muestra «no se pudo comprobar».
+- Versión única en `gestor.__version__`, comprobada contra `pyproject.toml` y `extension/manifest.json` en las pruebas.

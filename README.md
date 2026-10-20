@@ -19,6 +19,16 @@ Extensión (MV3) ──stdio──► Host nativo ──pipe con clave──► 
 - **DRM:** solo *detecta y explica* (compatible / parcial / protegido / desconocido). No elude ninguna protección.
 - **Vinculación segura:** la aplicación solo obedece a extensiones vinculadas con un código que ella misma muestra.
 
+## Instalar (Windows 10/11, usuarios)
+
+1. Descarga **`GestorDescargas-<versión>-instalador.exe`** desde [Releases](https://github.com/Rfalso014/Desking-/releases/latest).
+2. Ejecútalo. No pide administrador: se instala en `%LOCALAPPDATA%\Programs\GestorDescargas`, crea accesos directos y registra la conexión con Chrome y Edge. Opcional: «Iniciar con Windows en segundo plano».
+3. Conecta la extensión (abajo). La carpeta `extension` está en el menú Inicio → *Gestor de Descargas* → «Carpeta de la extensión del navegador».
+
+También hay una versión **portátil** (`…-portable.zip`): descomprímela y ejecuta `GestorDescargas.exe --instalar-host` una vez.
+Para actualizar: *Configuración → Acerca de → Buscar actualizaciones* y ejecuta el instalador nuevo encima (tus datos se conservan).
+Desinstalar: *Configuración de Windows → Aplicaciones*; quita también la conexión con el navegador y el inicio con Windows.
+
 ## Instalar y ejecutar (Windows, desarrollo)
 
 Requisitos: Python 3.11+ (probado con 3.13), Chrome o Edge.
@@ -82,10 +92,15 @@ Las pruebas descargan de verdad contra un servidor local con medios generados po
 ## Empaquetar un ejecutable
 
 ```powershell
-.\scripts\empaquetar.ps1      # crea dist\GestorDescargas (+ .zip) con PyInstaller, FFmpeg y Deno incluidos
+.\scripts\empaquetar.ps1      # PyInstaller + FFmpeg + Deno → dist\GestorDescargas, .zip portátil e instalador
 ```
 
-La versión empaquetada se instala con `GestorDescargas.exe --instalar-host` (ver `docs/LEEME_INSTALACION.txt`).
+Genera en `dist\`:
+- `GestorDescargas-<versión>-instalador.exe` — instalador por usuario hecho con [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`instalador\GestorDescargas.iss`). El script busca `ISCC.exe` en las rutas habituales o en la variable `ISCC`; si no lo encuentra, solo avisa.
+- `GestorDescargas-<versión>-portable.zip` — la misma carpeta comprimida.
+
+La versión sale de `src/gestor/__init__.py` (y debe coincidir con `pyproject.toml` y `extension/manifest.json`; una prueba lo comprueba).
+Opciones del ejecutable: `--instalar-host`, `--desinstalar-host`, `--estado-host`, `--limpiar-sistema` (quita conexión e inicio con Windows), `--segundo-plano`, `--version`.
 
 ## Seguridad
 
@@ -99,7 +114,7 @@ La versión empaquetada se instala con `GestorDescargas.exe --instalar-host` (ve
 
 - Probado en Windows con Chrome. **Firefox** y otros sistemas no están soportados todavía.
 - Los sitios cambian: yt-dlp hay que actualizarlo con frecuencia (`python scripts\actualizar_ytdlp.py`).
-- No hay soporte de cookies/inicio de sesión: los contenidos que lo exigen darán un error explicado.
+- Inicio de sesión: solo reutilizando la sesión de tu navegador o un `cookies.txt` (Configuración → Sesión); la aplicación no guarda contraseñas.
 - Sin firma de código: Windows SmartScreen o el antivirus pueden advertir sobre los `.exe`.
 - La velocidad extra depende del sitio; con videos cortos la diferencia es imperceptible.
 

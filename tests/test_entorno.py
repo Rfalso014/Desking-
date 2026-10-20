@@ -14,7 +14,13 @@ def test_python_es_suficientemente_nuevo():
 def test_paquete_gestor_se_importa():
     import gestor
 
-    assert gestor.__version__ == "0.1.0"
+    # La versión vive en tres sitios (paquete, pyproject, extensión): deben coincidir.
+    import json
+    import tomllib
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parents[1]
+    assert tomllib.loads((raiz / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"] == gestor.__version__
+    assert json.loads((raiz / "extension" / "manifest.json").read_text(encoding="utf-8"))["version"] == gestor.__version__
 
 
 def test_yt_dlp_se_importa_y_tiene_version():

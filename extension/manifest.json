@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gestor de Descargas",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Botón de descarga sobre los videos y menú contextual: envía el contenido a la aplicación Gestor de Descargas.",
   "minimum_chrome_version": "116",
   "permissions": [

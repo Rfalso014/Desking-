@@ -31,6 +31,15 @@ def _comandos_instalacion() -> int | None:
     elif arg == "--estado-host":
         for base, ruta in instalador.estado().items():
             print(f"{base}: {ruta or 'NO registrado'}")
+    elif arg == "--limpiar-sistema":     # lo usa el desinstalador: quita todo lo que la app escribió en el registro
+        from .nativo import autoinicio
+        instalador.desinstalar()
+        if autoinicio.activo():          # solo abre «Run» para escribir si de verdad hay algo que quitar
+            autoinicio.fijar(False)
+        print("Conexión con el navegador e inicio con Windows quitados.")
+    elif arg == "--version":
+        from . import __version__
+        print(__version__)
     else:
         return None
     return 0
@@ -65,6 +74,8 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")        # base uniforme sobre la que se aplica nuestro tema
     app.setApplicationName("Gestor de Descargas")
+    from . import __version__
+    app.setApplicationVersion(__version__)
     db, cola = crear_nucleo()
     try:
         vinculacion = Vinculacion(db)

@@ -1,7 +1,7 @@
 # Metadatos del proyecto y configuración de pytest.
 [project]
 name = "gestor-descargas"
-version = "0.1.0"
+version = "1.0.0"
 description = "Gestor de descargas multimedia (app de escritorio + extensión de navegador)"
 requires-python = ">=3.11"
 
