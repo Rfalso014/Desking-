@@ -1,5 +1,12 @@
 # Gestor de Descargas
 
+> ## ⬇️ [Descargar el instalador para Windows](https://github.com/Rfalso014/Desking-/releases/latest)
+> Abre el enlace, baja **`GestorDescargas-…-instalador.exe`** (en *Assets*) y ábrelo con doble clic. No necesitas Python ni nada más.
+> Si Windows muestra «Windows protegió su PC»: **Más información → Ejecutar de todas formas**.
+> El repositorio es privado: para ver la descarga hay que tener acceso a él en GitHub; si no, pide el `.exe` a quien te lo recomendó.
+>
+> *No descargues el código («Code → Download ZIP»): eso es para programadores y necesita Python.*
+
 Aplicación de escritorio (Python + PySide6) y extensión de navegador (Chrome/Edge, Manifest V3) para descargar y organizar **video, audio, subtítulos, portadas e imágenes** de muchos sitios (usa [yt-dlp](https://github.com/yt-dlp/yt-dlp), FFmpeg y gallery-dl).
 
 **Regla de oro: la extensión no descarga nada.** Solo detecta videos y manda órdenes («descargar», «cancelar», «eliminar»…). Quien descarga siempre es la aplicación, y **nada se descarga hasta que tú lo autorices**.
@@ -21,8 +28,8 @@ Extensión (MV3) ──stdio──► Host nativo ──pipe con clave──► 
 
 ## Instalar (Windows 10/11, usuarios)
 
-1. Descarga **`GestorDescargas-<versión>-instalador.exe`** desde [Releases](https://github.com/Rfalso014/Desking-/releases/latest).
-2. Ejecútalo. No pide administrador: se instala en `%LOCALAPPDATA%\Programs\GestorDescargas`, crea accesos directos y registra la conexión con Chrome y Edge. Opcional: «Iniciar con Windows en segundo plano».
+1. Descarga **`GestorDescargas-<versión>-instalador.exe`** desde [Releases](https://github.com/Rfalso014/Desking-/releases/latest) (sección *Assets*).
+2. Ejecútalo (si sale «Windows protegió su PC»: *Más información → Ejecutar de todas formas*). No pide administrador: se instala en `%LOCALAPPDATA%\Programs\GestorDescargas`, crea accesos directos y registra la conexión con Chrome y Edge. Opcional: «Iniciar con Windows en segundo plano».
 3. Conecta la extensión (abajo). La carpeta `extension` está en el menú Inicio → *Gestor de Descargas* → «Carpeta de la extensión del navegador».
 
 También hay una versión **portátil** (`…-portable.zip`): descomprímela y ejecuta `GestorDescargas.exe --instalar-host` una vez.
@@ -98,6 +105,14 @@ Las pruebas descargan de verdad contra un servidor local con medios generados po
 Genera en `dist\`:
 - `GestorDescargas-<versión>-instalador.exe` — instalador por usuario hecho con [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`instalador\GestorDescargas.iss`). El script busca `ISCC.exe` en las rutas habituales o en la variable `ISCC`; si no lo encuentra, solo avisa.
 - `GestorDescargas-<versión>-portable.zip` — la misma carpeta comprimida.
+
+Para que otras personas puedan descargarlo, publícalo en GitHub Releases (después de `git push`):
+
+```powershell
+.\scripts\publicar_release.ps1   # crea el release v<versión> y sube el instalador y el .zip (notas: docs\NOTAS_RELEASE.md)
+```
+
+Usa la variable `GITHUB_TOKEN` o, si no existe, la misma credencial con la que git sube los cambios. Si el release ya existe, reemplaza sus archivos.
 
 La versión sale de `src/gestor/__init__.py` (y debe coincidir con `pyproject.toml` y `extension/manifest.json`; una prueba lo comprueba).
 Opciones del ejecutable: `--instalar-host`, `--desinstalar-host`, `--estado-host`, `--limpiar-sistema` (quita conexión e inicio con Windows), `--segundo-plano`, `--version`.

@@ -84,3 +84,10 @@
 - «Buscar actualizaciones» (Configuración → Acerca de) consulta la API de GitHub Releases; solo informa y abre la página, nunca descarga ni instala solo.
   Si el repositorio es privado, la API responde 404 y la app muestra «no se pudo comprobar».
 - Versión única en `gestor.__version__`, comprobada contra `pyproject.toml` y `extension/manifest.json` en las pruebas.
+
+## Publicar el instalador (2026-10-21)
+- Problema: quien entraba al repositorio solo veía el código (pedía Python, FFmpeg…) porque el instalador nunca se publicó
+  (`dist/` no se sube a git y no había ningún release).
+- `scripts/publicar_release.ps1` crea el release `v<versión>` sobre el commit actual y sube instalador y .zip portátil
+  (notas en `docs/NOTAS_RELEASE.md`). El README empieza con el enlace de descarga y el paso de SmartScreen.
+- El repositorio sigue privado: solo quien tenga acceso ve el release; «Buscar actualizaciones» sigue sin poder comprobar.
