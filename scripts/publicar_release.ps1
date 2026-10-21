@@ -23,8 +23,14 @@ if (-not (git branch -r --contains $commit)) { throw "El commit $commit no esta 
 
 $token = $env:GITHUB_TOKEN
 if (-not $token) {
-    $credencial = "protocol=https`nhost=github.com`n" | git credential fill
-    $token = ($credencial | Where-Object { $_ -like "password=*" }) -replace "^password=", ""
+    # La petición va en un archivo sin BOM: con la consola en UTF-8, PowerShell 5.1 antepone un BOM a todo lo
+    # que escribe en la entrada de otro programa y git deja de reconocer «protocol=».
+    $pedido = [IO.Path]::GetTempFileName()
+    [IO.File]::WriteAllText($pedido, "protocol=https`nhost=github.com`n`n", [Text.Encoding]::ASCII)
+    $credencial = cmd /c "git credential fill < `"$pedido`""
+    Remove-Item $pedido
+    $token = "$($credencial | Where-Object { $_ -like 'password=*' })" -replace "^password=", ""
+    $token = $token.Trim()
 }
 if (-not $token) { throw "Sin credencial de GitHub: define GITHUB_TOKEN o inicia sesion con git." }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -35,7 +41,7 @@ try {
     Write-Host "El release $etiqueta ya existe: se reemplazan sus archivos."
 } catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
-    $notas = Get-Content "docs\NOTAS_RELEASE.md" -Raw -Encoding UTF8
+    $notas = [IO.File]::ReadAllText((Join-Path $raiz "docs\NOTAS_RELEASE.md"))   # Get-Content mete PSPath, etc. en el JSON
     $cuerpo = @{ tag_name = $etiqueta; target_commitish = $commit; name = "Gestor de Descargas $version"; body = $notas } | ConvertTo-Json
     $release = Invoke-RestMethod "$api/releases" -Method Post -Headers $cabeceras `
         -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($cuerpo))
