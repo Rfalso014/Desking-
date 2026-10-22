@@ -6,6 +6,7 @@ Flujo de una tarea:
 """
 import queue
 import threading
+from dataclasses import replace
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -13,15 +14,27 @@ from pathlib import Path
 from . import drm, reglas
 from .config import Preferencias, localizar_deno, opciones_sesion
 from .db import BaseDatos
-from .descargador import Progreso, descargar, limpiar_carpeta_trabajo
+from .descargador import Progreso, asegurar_ffmpeg_en_path, descargar, limpiar_carpeta_trabajo
 from .errores import traducir_excepcion
+from .extractor import texto_tamanos
 from .extractor import _extraer_con_ytdlp, obtener_info
 from .modelos import (ESTADOS_ACTIVOS, CodigoError, ErrorGestor, EstadoTarea, InfoContenido,
                       Tarea)
 from .organizador import organizar, sanear_nombre
-from .validacion import validar_url, verificar_resolucion
+from .validacion import clave_video, validar_url, verificar_resolucion
 
+ETIQUETA_ESTADO = {EstadoTarea.DETECTADO: "detectado, esperando que lo autorices", EstadoTarea.PENDIENTE: "en espera",
+                   EstadoTarea.ANALIZANDO: "analizándose", EstadoTarea.DESCARGANDO: "descargándose ahora",
+                   EstadoTarea.PROCESANDO: "procesándose", EstadoTarea.COMPLETADO: "ya descargado"}
 _INTERVALO_PROGRESO = 0.5   # segundos mínimos entre escrituras de progreso a la base de datos
+
+
+def _lista_vacia() -> ErrorGestor:
+    # Lo típico: se envió la dirección de un inicio o feed (youtube.com/ -> «recommended») en vez de la del video.
+    return ErrorGestor(CodigoError.CONTENIDO_NO_DISPONIBLE, "En esta dirección no hay ningún video que descargar.",
+                       causa="Es una página de inicio, un feed o una lista privada o vacía, no un video concreto.",
+                       solucion="Abre el video en su propia página y añádelo desde ahí, o haz clic derecho "
+                                "sobre su miniatura → «Añadir a Gestor de Descargas».")
 
 
 class GestorCola:
@@ -30,6 +43,7 @@ class GestorCola:
                  descargar_fn: Callable = descargar, permitir_interno: bool = False):
         self.db = db
         self.ffmpeg_dir = ffmpeg_dir
+        asegurar_ffmpeg_en_path(ffmpeg_dir)           # antes de cualquier descarga: yt-dlp lo necesita para bajar trozos
         self.deno = deno if deno is not None else localizar_deno()
         self._extraer = extraer
         self._descargar = descargar_fn
@@ -110,6 +124,8 @@ class GestorCola:
             if not self._permitir_interno:
                 verificar_resolucion(t.url)
             info = self._consultar(t.url)
+            if info.es_lista and not info.entradas:
+                raise _lista_vacia()             # se avisa ya, no al pulsar «Descargar»
             d = None if info.es_lista else drm.evaluar(t.url, info)
         except Exception as exc:
             e = drm.enriquecer_error(t.url, exc if isinstance(exc, ErrorGestor) else traducir_excepcion(exc))
@@ -128,14 +144,38 @@ class GestorCola:
             t.notas = ["Es una lista de reproducción: al descargarla se agrega cada video a la cola."]
         else:
             t.notas = [d.motivo] if d.nivel != drm.Compatibilidad.COMPATIBLE else []
+            tamanos = texto_tamanos(info)
+            if tamanos:
+                t.notas.append(tamanos)
         self._publicar(t)
 
+    def buscar_repetida(self, url: str, opciones: dict | None = None) -> Tarea | None:
+        """La tarea de la lista con el MISMO video y el mismo tipo de descarga (video, audio…), si la hay.
+
+        No cuentan las canceladas ni las que fallaron: volver a añadirlas es lo normal.
+        """
+        clave = clave_video(url)
+        tipo = lambda o: ((o or {}).get("modo", "video"), [list(map(float, x)) for x in (o or {}).get("tramos") or []])  # noqa: E731
+        vigentes = [e for e in EstadoTarea if e not in (EstadoTarea.CANCELADO, EstadoTarea.ERROR)]
+        for t in self.db.listar_tareas(estados=vigentes, limite=2000):
+            if clave_video(t.url) == clave and tipo(t.opciones) == tipo(opciones):     # otro trozo del mismo video no es repetido
+                return t
+        return None
+
+    def exigir_no_repetida(self, url: str, opciones: dict | None = None) -> None:
+        """Lanza ErrorGestor(DUPLICADO) si ese video ya está en la lista; quien llama pregunta si añadirlo otra vez."""
+        t = self.buscar_repetida(url, opciones)
+        if t is not None:
+            raise ErrorGestor(CodigoError.DUPLICADO, "Este video ya está en tu lista.",
+                              causa=f"«{t.titulo or t.url}» ({ETIQUETA_ESTADO.get(t.estado, t.estado.value)}).",
+                              solucion="Si quieres descargarlo otra vez, confírmalo.")
+
     def encolar(self, url: str, *, origen: str | None = None, opciones: dict | None = None,
-                destino_manual: str | None = None) -> Tarea:
+                destino_manual: str | None = None, permitir_repetida: bool = False) -> Tarea:
         url = validar_url(url, permitir_interno=self._permitir_interno)
         self._validar_elecciones(opciones)
         with self._lock:
-            for t in self.db.listar_tareas(estados=[EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS]):
+            for t in ([] if permitir_repetida else self.db.listar_tareas(estados=[EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS])):
                 if t.url == url and t.opciones == (opciones or {}):
                     return t                       # ya está en la cola: no se duplica
             t = self.db.crear_tarea(url, origen=origen, opciones=opciones, destino_manual=destino_manual)
@@ -283,8 +323,7 @@ class GestorCola:
     def _expandir_lista(self, t: Tarea, info: InfoContenido) -> None:
         """Una lista de reproducción se convierte en una descarga por video, todas en una misma carpeta."""
         if not info.entradas:
-            raise ErrorGestor(CodigoError.CONTENIDO_NO_DISPONIBLE, "La lista no tiene videos que se puedan descargar.",
-                              solucion="Comprueba que la lista sea pública y no esté vacía.")
+            raise _lista_vacia()
         carpeta = sanear_nombre(info.titulo, maximo=80)
         opciones = {"subcarpeta": carpeta, **t.opciones}      # lo que el usuario eligió prevalece
         ya = {x.url for x in self.db.listar_tareas(estados=[EstadoTarea.PENDIENTE, *ESTADOS_ACTIVOS])
@@ -377,7 +416,8 @@ class GestorCola:
 
             t.estado = EstadoTarea.DESCARGANDO
             self._publicar(t)
-            resultado = self._descargar(t.url, res.a_opciones(prefs, self.ffmpeg_dir, self.deno), trabajo,
+            opciones = replace(res.a_opciones(prefs, self.ffmpeg_dir, self.deno), duracion_video=info.duracion_seg)
+            resultado = self._descargar(t.url, opciones, trabajo,
                                         progreso=alprogreso, cancelar=ev,
                                         permitir_interno=self._permitir_interno)
 

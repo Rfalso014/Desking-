@@ -127,7 +127,9 @@ class TarjetaTarea(QFrame):
             self._poner_botones(e)
         self.titulo.setText(t.titulo or t.url)
         self.chip.setText(ETIQUETA[e]); _propiedad(self.chip, "estado", e)
-        partes = [t.sitio or "", formato_duracion(t.duracion)]
+        tramos = (t.opciones or {}).get("tramos") or []
+        partes = [t.sitio or "", formato_duracion(t.duracion), "Para edición" if (t.opciones or {}).get("editable") else "",
+                  ("✂ " + " · ".join(f"{formato_duracion(a) or '0:00'}–{formato_duracion(b)}" for a, b in tramos)) if tramos else ""]
         self.meta.setText("  ·  ".join(p for p in partes if p) or t.url)
         if pixmap is not None:
             self.miniatura.setPixmap(pixmap.scaled(112, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))

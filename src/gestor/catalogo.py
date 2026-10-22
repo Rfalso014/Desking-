@@ -16,6 +16,16 @@ def _ok_idiomas(v): return isinstance(v, (list, tuple)) and len(v) <= 20 and all
 def _ok_destino(v): return v is None or (isinstance(v, str) and 0 < len(v) <= 260 and "\x00" not in v)
 def _ok_bool(v): return isinstance(v, bool)
 def _ok_subcarpeta(v): return v is None or (isinstance(v, str) and 0 < len(v) <= 80)
+MAX_TRAMOS, MAX_SEGUNDOS = 10, 24 * 3600
+
+
+def _ok_segundo(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and 0 <= x <= MAX_SEGUNDOS
+
+
+def _ok_tramos(v):
+    """[[inicio, fin], ...] en segundos: trozos del video que se quieren (vacío = el video entero)."""
+    return (isinstance(v, (list, tuple)) and len(v) <= MAX_TRAMOS
+            and all(isinstance(t, (list, tuple)) and len(t) == 2 and _ok_segundo(t[0]) and _ok_segundo(t[1]) and t[0] < t[1] for t in v))
 
 
 # Campos que una regla o una tarea puede cambiar, con su validador.
@@ -26,6 +36,9 @@ CAMPOS_ACCION = {
     "formato_audio": lambda v: v in FORMATOS_AUDIO,
     "subtitulos": _ok_idiomas,
     "portada": _ok_bool,
+    "editable": _ok_bool,          # MP4 H.264 + AAC que abre cualquier programa de edición
+    "tramos": _ok_tramos,          # solo estos minutos del video
+    "corte_exacto": _ok_bool,      # cortar en el segundo exacto (convierte el trozo; si no, corta en el fotograma clave)
     "subcarpeta": _ok_subcarpeta,
     "destino": _ok_destino,
     "excluir": _ok_bool,

@@ -15,7 +15,8 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from pathlib import Path
 
-from . import drm
+from . import __version__, drm
+from .actualizador import Actualizador, version_extension
 from .cola import GestorCola
 from .modelos import CodigoError, ErrorGestor, EstadoTarea, Tarea
 from .nativo.comun import clave_ipc, direccion_pipe
@@ -36,12 +37,17 @@ def tarea_resumen(t: Tarea) -> dict:
 def info_resumen(info, diag: drm.Diagnostico) -> dict:
     formatos = [{"id": f.id, "ext": f.extension, "tipo": f.tipo.value, "altura": f.altura,
                  "tamano": f.tamano_bytes, "estimado": f.tamano_es_estimado, "drm": f.tiene_drm}
-                for f in info.formatos[:40]]
+                for f in info.formatos[-100:]]          # los últimos son los de más calidad
     return {"titulo": info.titulo, "sitio": info.sitio, "autor": info.autor, "duracion": info.duracion_seg,
             "miniatura": info.miniatura_url, "en_vivo": info.es_en_vivo, "es_lista": info.es_lista,
             "formatos": formatos, "subtitulos": info.subtitulos,
             "diagnostico": {"nivel": diag.nivel.value, "confianza": diag.confianza.value,
                             "motivo": diag.motivo, "alternativas": list(diag.alternativas)}}
+
+
+def _sin_detalles(estado: dict) -> dict:
+    """La extensión solo necesita qué se actualiza, no las direcciones de descarga."""
+    return {**estado, "pendientes": [{k: p.get(k) for k in ("tipo", "nombre", "actual", "nueva")} for p in estado["pendientes"]]}
 
 
 def _abrir_en_explorador(ruta: str) -> None:
@@ -55,6 +61,7 @@ class Manejador:
                  abrir_carpeta: Callable[[str], None] = _abrir_en_explorador):
         self.cola = cola
         self.al_mostrar: Callable[[], None] | None = None     # la aplicación lo fija: trae la ventana al frente
+        self.actualizador: Actualizador | None = None          # la aplicación lo fija: «Actualizar aplicación y extensión»
         self.vinculacion = vinculacion or Vinculacion(cola.db)
         self._abrir = abrir_carpeta
 
@@ -77,7 +84,13 @@ class Manejador:
     def _ejecutar(self, accion: str, d: dict, token: str | None) -> dict:
         c, v = self.cola, self.vinculacion
         if accion == "ping":
-            return {"app": "gestor-descargas", "version": 1, "vinculado": v.validar_token(token)}
+            r = {"app": "gestor-descargas", "version": 1, "vinculado": v.validar_token(token),
+                 "version_app": __version__, "version_extension": version_extension()}
+            if self.actualizador and r["vinculado"]:
+                marca = self.actualizador.marca()
+                r["actualizacion_id"] = marca.get("id") if marca.get("recargar_extension") else None
+                r["hay_actualizacion"] = bool(self.actualizador.estado()["pendientes"])
+            return r
         if accion == "mostrar":
             if self.al_mostrar:
                 self.al_mostrar()
@@ -89,16 +102,31 @@ class Manejador:
         if accion == "analizar":
             r = c.analizar(d["url"])
             return info_resumen(r["info"], r["diagnostico"])
+        if accion in ("detectar", "encolar") and not d.get("forzar"):
+            c.exigir_no_repetida(d["url"], d.get("opciones"))       # la extensión pregunta y reintenta con «forzar»
         if accion == "detectar":
             return tarea_resumen(c.detectar(d["url"], d.get("origen"), d.get("opciones")))
         if accion == "encolar":
-            return tarea_resumen(c.encolar(d["url"], origen=d.get("origen"), opciones=d.get("opciones")))
+            return tarea_resumen(c.encolar(d["url"], origen=d.get("origen"), opciones=d.get("opciones"),
+                                           permitir_repetida=bool(d.get("forzar"))))
         if accion == "cancelar_todas":
             return {"canceladas": c.cancelar_todas()}
         if accion == "limpiar":
             return {"eliminadas": c.limpiar_terminadas()}
         if accion == "iniciar":
             return tarea_resumen(c.iniciar_detectada(d["id"], d.get("opciones")))
+        if accion in ("actualizacion", "actualizar", "reiniciar"):
+            a = self.actualizador
+            if a is None:
+                raise ErrorGestor(CodigoError.CONFIGURACION, "Esta aplicación no puede actualizarse sola.")
+            if accion == "actualizar":
+                return _sin_detalles(a.iniciar())
+            if accion == "reiniciar":
+                a.reiniciar()
+                return {}
+            if d.get("buscar") and not a.ocupado():
+                a.buscar_en_segundo_plano()
+            return _sin_detalles(a.estado())
         if accion == "listar":
             estados = [EstadoTarea(e) for e in d["estados"]] if d.get("estados") else None
             ts = c.listar(estados=estados, texto=d.get("texto"), limite=d.get("limite", 100))

@@ -1,106 +1,119 @@
-"""Tema visual (claro y oscuro) de la aplicación, escrito como hoja de estilos Qt (QSS).
+"""Tema visual de la aplicación (diseño «riel lateral», el mismo de la extensión) como hoja de estilos Qt (QSS).
 
-QSS es como CSS: describe colores, bordes y tamaños. Los colores viven en un diccionario
-para que cambiar de tema sea cambiar de diccionario.
+Día = verde azulado y amarillo; noche = violeta y coral. Los colores viven en un diccionario
+para que cambiar de tema sea cambiar de diccionario (y coinciden con extension/popup.css).
 """
-OSCURO = {
-    "fondo": "#171433", "lateral": "#2d2866", "lateral_texto": "#ffffff", "lateral_tenue": "#b9b3e6", "lateral_sel": "rgba(255,255,255,0.16)",
-    "superficie": "#221e45", "tarjeta": "#2a2552", "superficie2": "#332d63", "borde": "#3d3772", "texto": "#eeecfb", "tenue": "#a9a4d4",
-    "titulo": "#c4baff", "acento": "#8b7cf6", "acento_h": "#a093ff", "sobre_acento": "#ffffff", "ok": "#4ade9c", "error": "#ff7b8a",
-    "aviso": "#f7c05a", "seleccion": "#3b3470",
+DIA = {
+    "riel": "#1f9e94", "riel_texto": "#d8f3f0", "fondo": "#ffffff", "superficie": "#ffffff", "tarjeta": "#f2f8f8",
+    "superficie2": "#e6f2f1", "borde": "#e3ecee", "texto": "#1d2445", "tenue": "#6b7390", "titulo": "#1d2445",
+    "acento": "#1f9e94", "acento_h": "#188a81", "sobre_acento": "#ffffff", "resalte": "#ffd45c", "sobre_resalte": "#4a3600",
+    "promo": "#d4eef8", "ok": "#2c6b34", "error": "#b42323", "aviso": "#7a5600", "seleccion": "#d9f2ef",
+    "e_azul": ("#d9f2ef", "#0f6e66"), "e_amarillo": ("#fff3c9", "#7a5600"), "e_verde": ("#e2f5e4", "#2c6b34"),
+    "e_rojo": ("#fde4e4", "#a12d2d"), "e_gris": ("#eceff4", "#5b6280"),
 }
-CLARO = {
-    "fondo": "#f1edfd", "lateral": "#5b52b5", "lateral_texto": "#ffffff", "lateral_tenue": "#d4cff5", "lateral_sel": "rgba(255,255,255,0.18)",
-    "superficie": "#ffffff", "tarjeta": "#f3f0ff", "superficie2": "#ece8fb", "borde": "#e2ddf5", "texto": "#2a2650", "tenue": "#8a86ad",
-    "titulo": "#5b52b5", "acento": "#7a62ea", "acento_h": "#6a52da", "sobre_acento": "#ffffff", "ok": "#16a37a", "error": "#e5484d",
-    "aviso": "#c77d12", "seleccion": "#e4defc",
+NOCHE = {
+    "riel": "#2b2350", "riel_texto": "#b9b0e6", "fondo": "#17132b", "superficie": "#17132b", "tarjeta": "#221c3d",
+    "superficie2": "#2a2349", "borde": "#2e2752", "texto": "#f1eefe", "tenue": "#9a93bf", "titulo": "#f1eefe",
+    "acento": "#ff8a6b", "acento_h": "#ff9e84", "sobre_acento": "#3a1206", "resalte": "#ff8a6b", "sobre_resalte": "#3a1206",
+    "promo": "#2e2752", "ok": "#8fe0b5", "error": "#ff9fb0", "aviso": "#f5d38a", "seleccion": "#2e2752",
+    "e_azul": ("#4a2a24", "#ffb7a3"), "e_amarillo": ("#3a3320", "#f5d38a"), "e_verde": ("#1f3a2e", "#8fe0b5"),
+    "e_rojo": ("#4a1f2a", "#ff9fb0"), "e_gris": ("#2a2349", "#b9b0e6"),
 }
+CLARO, OSCURO = DIA, NOCHE          # nombres anteriores
 
-# Colores de cada estado de descarga (se usan en las etiquetas)
+# Colores de cada estado de descarga (fondo, texto), igual que las etiquetas de la extensión
 COLOR_ESTADO = {
-    "detectado": "tenue", "analizando": "aviso", "pendiente": "tenue", "descargando": "acento",
-    "procesando": "aviso", "completado": "ok", "cancelado": "tenue", "error": "error",
+    "detectado": "e_amarillo", "analizando": "e_azul", "pendiente": "e_amarillo", "descargando": "e_azul",
+    "procesando": "e_amarillo", "completado": "e_verde", "cancelado": "e_gris", "error": "e_rojo",
 }
 
 
 def paleta(oscuro: bool) -> dict:
-    return OSCURO if oscuro else CLARO
+    return NOCHE if oscuro else DIA
 
 
 def hoja_de_estilos(c: dict) -> str:
-    def tinte(hex_: str, a: float = 0.16) -> str:      # mismo color pero casi transparente, para el fondo de las etiquetas
-        r, g, b = (int(hex_[i:i + 2], 16) for i in (1, 3, 5))
-        return f"rgba({r},{g},{b},{a})"
     estados = "\n".join(
-        f'QLabel[estado="{e}"] {{ color: {c[k]}; background: {tinte(c[k])}; }}' for e, k in COLOR_ESTADO.items())
+        f'QLabel[estado="{e}"] {{ background: {c[k][0]}; color: {c[k][1]}; }}' for e, k in COLOR_ESTADO.items())
     return f"""
 * {{ font-family: "Segoe UI", "Inter", sans-serif; font-size: 10pt; color: {c['texto']}; }}
-QMainWindow, QWidget#pagina, QScrollArea, QScrollArea > QWidget > QWidget {{ background: {c['fondo']}; }}
-QToolTip {{ background: {c['superficie2']}; color: {c['texto']}; border: 1px solid {c['borde']}; padding: 4px 8px; }}
+QMainWindow {{ background: {c['riel']}; }}
+QFrame#panel {{ background: {c['superficie']}; border-radius: 22px; }}
+QWidget#pagina, QScrollArea, QScrollArea > QWidget > QWidget, QStackedWidget {{ background: {c['superficie']}; }}
+QToolTip {{ background: {c['tarjeta']}; color: {c['texto']}; border: 1px solid {c['borde']}; padding: 4px 8px; }}
 
-/* Barra lateral */
-QFrame#lateral {{ background: {c['lateral']}; border: none; }}
-QFrame#lateral QLabel {{ color: {c['lateral_texto']}; background: transparent; }}
-QLabel#marca {{ font-size: 15pt; font-weight: 800; color: {c['lateral_texto']}; }}
-QLabel#submarca {{ color: {c['lateral_tenue']}; font-size: 9pt; }}
-QPushButton[nav="true"] {{ text-align: left; padding: 12px 16px; border: none; border-radius: 14px; color: {c['lateral_tenue']};
-                           font-weight: 600; background: transparent; }}
-QPushButton[nav="true"]:hover {{ background: rgba(255,255,255,0.10); color: {c['lateral_texto']}; }}
-QPushButton[nav="true"]:checked {{ background: {c['lateral_sel']}; color: {c['lateral_texto']}; font-weight: 700; }}
-QFrame#lateral QLabel#pie {{ color: {c['lateral_tenue']}; font-size: 9pt; }}
+/* Riel de íconos: la sección activa se «encaja» en el panel */
+QFrame#riel {{ background: transparent; border: none; }}
+QLabel#logo {{ background: {c['resalte']}; border-radius: 14px; }}
+QToolButton[nav="true"] {{ color: {c['riel_texto']}; background: transparent; border: none; font-size: 8.5pt; font-weight: 600;
+                           border-top-left-radius: 16px; border-bottom-left-radius: 16px; padding: 8px 0 6px 0; }}
+QToolButton[nav="true"]:hover {{ color: #ffffff; }}
+QToolButton[nav="true"]:checked {{ background: {c['superficie']}; color: {c['acento']}; }}
+QToolButton#tema {{ background: transparent; border: none; border-radius: 14px; padding: 6px; }}
+QToolButton#tema:hover {{ background: rgba(255,255,255,0.14); }}
 
 /* Títulos */
-QLabel#titulo {{ font-size: 22pt; font-weight: 800; color: {c['titulo']}; }}
+QLabel#titulo {{ font-size: 21pt; font-weight: 700; color: {c['titulo']}; }}
 QLabel#subtitulo {{ color: {c['tenue']}; }}
 QLabel[seccion="true"] {{ font-size: 11pt; font-weight: 700; }}
 QLabel[tenue="true"] {{ color: {c['tenue']}; }}
 
+/* Resumen de la cola (Descargando · En espera · Velocidad) */
+QFrame#dato {{ background: {c['tarjeta']}; border-radius: 14px; }}
+QFrame#dato[resaltado="true"] {{ background: {c['resalte']}; }}
+QLabel#datoNum {{ font-size: 15pt; font-weight: 700; background: transparent; }}
+QLabel#datoTxt {{ color: {c['tenue']}; font-size: 9pt; background: transparent; }}
+QFrame#dato[resaltado="true"] QLabel {{ color: {c['sobre_resalte']}; }}
+
 /* Tarjetas */
-QFrame#tarjeta {{ background: {c['tarjeta']}; border: 1px solid transparent; border-radius: 20px; }}
-QFrame#caja {{ background: {c['superficie']}; border: 1px solid {c['borde']}; border-radius: 20px; }}
-QFrame#tarjeta:hover {{ border-color: {c['acento']}; }}
-QLabel#miniatura {{ background: {c['superficie2']}; border-radius: 14px; color: {c['tenue']}; font-size: 20pt; }}
-QLabel#tituloTarjeta {{ font-weight: 700; font-size: 11pt; }}
+QFrame#tarjeta {{ background: {c['tarjeta']}; border: 1px solid transparent; border-radius: 18px; }}
+QFrame#tarjeta:hover {{ border-color: {c['borde']}; }}
+QFrame#caja {{ background: {c['tarjeta']}; border: none; border-radius: 20px; }}
+QFrame#promo {{ background: {c['promo']}; border-radius: 20px; }}
+QLabel#miniatura {{ background: {c['superficie2']}; border-radius: 12px; color: {c['tenue']}; font-size: 18pt; }}
+QLabel#tituloTarjeta {{ font-weight: 700; font-size: 10.5pt; }}
 QLabel#detalle {{ color: {c['tenue']}; font-size: 9pt; }}
 QLabel#errorTexto {{ color: {c['error']}; font-size: 9pt; }}
 QLabel[chip="true"] {{ border-radius: 9px; padding: 2px 10px; font-weight: 700; font-size: 8.5pt; }}
 {estados}
 QLabel#codigo {{ font-family: "Cascadia Mono", "Consolas", monospace; font-size: 34pt; font-weight: 700; letter-spacing: 4px;
-                 color: {c['acento']}; background: {c['superficie2']}; border-radius: 14px; padding: 12px 24px; }}
+                 color: {c['acento']}; background: {c['superficie']}; border-radius: 16px; padding: 12px 24px; }}
 QLabel#paso {{ background: {c['acento']}; color: {c['sobre_acento']}; border-radius: 13px; font-weight: 700; min-width: 26px; max-width: 26px;
                min-height: 26px; max-height: 26px; qproperty-alignment: AlignCenter; }}
 
 /* Progreso */
-QProgressBar {{ background: {c['superficie2']}; border: none; border-radius: 4px; max-height: 8px; min-height: 8px; text-align: center; color: transparent; }}
-QProgressBar::chunk {{ background: {c['acento']}; border-radius: 4px; }}
+QProgressBar {{ background: {c['superficie2']}; border: none; border-radius: 3px; max-height: 6px; min-height: 6px; text-align: center; color: transparent; }}
+QProgressBar::chunk {{ background: {c['acento']}; border-radius: 3px; }}
 
-/* Botones */
-QPushButton {{ background: {c['superficie2']}; border: 1px solid {c['borde']}; border-radius: 14px; padding: 8px 18px; font-weight: 600; }}
+/* Botones (píldoras) */
+QPushButton {{ background: {c['superficie2']}; border: 1px solid transparent; border-radius: 16px; padding: 7px 18px; font-weight: 600; }}
 QPushButton:hover {{ border-color: {c['acento']}; }}
 QPushButton:pressed {{ background: {c['seleccion']}; }}
 QPushButton:disabled {{ color: {c['tenue']}; }}
 QPushButton[primary="true"] {{ background: {c['acento']}; border-color: {c['acento']}; color: {c['sobre_acento']}; }}
 QPushButton[primary="true"]:hover {{ background: {c['acento_h']}; }}
-QPushButton[peligro="true"] {{ color: {c['error']}; }}
-QPushButton[filtro="true"] {{ border-radius: 16px; padding: 6px 16px; background: {c['tarjeta']}; border-color: transparent; color: {c['tenue']}; }}
+QPushButton[resalte="true"] {{ background: {c['resalte']}; border-color: {c['resalte']}; color: {c['sobre_resalte']}; }}
+QPushButton[peligro="true"] {{ background: transparent; color: {c['error']}; border-color: {c['error']}; }}
+QPushButton[filtro="true"] {{ border-radius: 14px; padding: 5px 15px; background: {c['tarjeta']}; border-color: transparent; color: {c['tenue']}; font-weight: 500; }}
 QPushButton[filtro="true"]:checked {{ background: {c['acento']}; color: {c['sobre_acento']}; border-color: {c['acento']}; }}
 QPushButton[enlace="true"] {{ border: none; background: transparent; color: {c['acento']}; padding: 2px 4px; }}
 QPushButton:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {c['acento']}; }}
 
 /* Campos */
-QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{ background: {c['superficie']}; border: 1px solid {c['borde']}; border-radius: 14px; padding: 8px 12px;
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{ background: {c['superficie']}; border: 1px solid {c['borde']}; border-radius: 12px; padding: 7px 11px;
                                                   selection-background-color: {c['acento']}; selection-color: {c['sobre_acento']}; }}
-QLineEdit#entradaUrl {{ font-size: 11pt; padding: 12px 18px; border-radius: 18px; background: {c['tarjeta']}; border-color: transparent; }}
+QLineEdit#entradaUrl {{ font-size: 11pt; padding: 11px 16px; border-radius: 16px; background: {c['superficie']}; border-color: {c['borde']}; }}
+QComboBox::drop-down {{ border: none; width: 26px; }}
 QComboBox QAbstractItemView {{ background: {c['superficie']}; border: 1px solid {c['borde']}; selection-background-color: {c['seleccion']}; selection-color: {c['texto']}; }}
-QCheckBox {{ spacing: 8px; }}
-QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px; border: 1px solid {c['borde']}; background: {c['superficie']}; }}
+QCheckBox {{ spacing: 8px; background: transparent; }}
+QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 6px; border: 1px solid {c['borde']}; background: {c['superficie']}; }}
 QCheckBox::indicator:checked {{ background: {c['acento']}; border-color: {c['acento']}; }}
-QGroupBox {{ border: 1px solid {c['borde']}; border-radius: 20px; margin-top: 14px; padding: 16px 14px 10px 14px; background: {c['superficie']}; font-weight: 700; }}
-QGroupBox::title {{ subcontrol-origin: margin; left: 14px; padding: 0 6px; color: {c['tenue']}; }}
+QGroupBox {{ border: none; border-radius: 20px; margin-top: 16px; padding: 18px 16px 12px 16px; background: {c['tarjeta']}; font-weight: 700; }}
+QGroupBox::title {{ subcontrol-origin: margin; left: 16px; padding: 0 4px; color: {c['texto']}; }}
 
 /* Tablas */
-QTableWidget {{ background: {c['superficie']}; border: 1px solid {c['borde']}; border-radius: 12px; gridline-color: transparent; selection-background-color: {c['seleccion']};
-                selection-color: {c['texto']}; alternate-background-color: {c['superficie']}; }}
+QTableWidget {{ background: {c['tarjeta']}; border: none; border-radius: 16px; gridline-color: transparent; selection-background-color: {c['seleccion']};
+                selection-color: {c['texto']}; alternate-background-color: {c['tarjeta']}; }}
 QTableWidget::item {{ padding: 6px 8px; border-bottom: 1px solid {c['borde']}; }}
 QHeaderView::section {{ background: {c['superficie2']}; color: {c['tenue']}; border: none; border-bottom: 1px solid {c['borde']}; padding: 8px; font-weight: 700; text-align: left; }}
 QTableCornerButton::section {{ background: {c['superficie2']}; border: none; }}
@@ -110,6 +123,6 @@ QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {c['borde']}; border-radius: 4px; min-height: 30px; }}
 QScrollBar::handle:vertical:hover {{ background: {c['tenue']}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
-QStatusBar {{ background: {c['fondo']}; color: {c['tenue']}; border: none; }}
-QMessageBox, QDialog {{ background: {c['fondo']}; }}
+QStatusBar {{ background: {c['riel']}; color: {c['riel_texto']}; border: none; }}
+QMessageBox, QDialog {{ background: {c['superficie']}; }}
 """

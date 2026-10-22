@@ -1,12 +1,12 @@
-﻿import subprocess
+import subprocess
 import threading
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from gestor.descargador import (OpcionesDescarga, RolArchivo, construir_opciones_ytdlp,
-                                construir_selector, descargar, limpiar_carpeta_trabajo)
+from gestor.descargador import (OpcionesDescarga, RolArchivo, codecs_de, construir_opciones_ytdlp,
+                                construir_selector, descargar, limpiar_carpeta_trabajo, preparar_para_edicion)
 from gestor.modelos import CodigoError, ErrorGestor
 from tests.conftest import FFMPEG_DIR, necesita_ffmpeg
 
@@ -32,6 +32,14 @@ def test_audio_original_no_convierte_pero_mp3_si():
     assert mp3["postprocessors"][0]["preferredcodec"] == "mp3"
     ogg = construir_opciones_ytdlp(OpcionesDescarga(modo="audio", formato_audio="ogg"), Path("x"), h)
     assert ogg["postprocessors"][0]["preferredcodec"] == "vorbis"
+
+
+def test_modo_edicion_prefiere_h264_aac_en_mp4():
+    h = lambda d: None  # noqa: E731
+    p = construir_opciones_ytdlp(OpcionesDescarga(editable=True, contenedor_video="mkv"), Path("x"), h)
+    assert p["format_sort"] == ["res", "vcodec:h264", "acodec:aac"] and p["merge_output_format"] == "mp4"
+    normal = construir_opciones_ytdlp(OpcionesDescarga(), Path("x"), h)
+    assert "format_sort" not in normal
 
 
 @pytest.mark.parametrize("cambio", [
@@ -134,3 +142,135 @@ def test_sesion_del_navegador_llega_a_yt_dlp(tmp_path):
     assert construir_opciones_ytdlp(o, Path("x"), lambda d: None)["cookiesfrombrowser"] == ("firefox",)
     with pytest.raises(ErrorGestor):
         OpcionesDescarga(sesion={"exec": "calc"}).validar()
+
+
+def _clip(ruta: Path, *args: str) -> Path:
+    subprocess.run([str(FFMPEG_DIR / "ffmpeg"), "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=160x120:rate=15",
+                    "-f", "lavfi", "-i", "sine=duration=1", "-shortest", *args, str(ruta)], check=True)
+    return ruta
+
+
+@necesita_ffmpeg
+def test_preparar_para_edicion_convierte_a_h264_aac(tmp_path):
+    origen = _clip(tmp_path / "raro.mkv", "-c:v", "mpeg4", "-c:a", "mp2")
+    final = preparar_para_edicion(origen, FFMPEG_DIR)
+    assert final == tmp_path / "raro.mp4" and not origen.exists()
+    assert codecs_de(final, FFMPEG_DIR) == ("h264", "aac")
+    assert [f.name for f in tmp_path.iterdir()] == ["raro.mp4"]      # sin temporales
+
+
+@necesita_ffmpeg
+def test_preparar_para_edicion_no_toca_lo_que_ya_sirve(tmp_path):
+    bueno = _clip(tmp_path / "ok.mp4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac")
+    antes = bueno.stat().st_mtime_ns
+    assert preparar_para_edicion(bueno, FFMPEG_DIR) == bueno and bueno.stat().st_mtime_ns == antes
+
+
+@necesita_ffmpeg
+def test_preparar_para_edicion_se_puede_cancelar(tmp_path):
+    origen = _clip(tmp_path / "raro.mkv", "-c:v", "mpeg4", "-c:a", "mp2")
+    ev = threading.Event(); ev.set()
+    with pytest.raises(ErrorGestor) as e:
+        preparar_para_edicion(origen, FFMPEG_DIR, ev)
+    assert e.value.codigo == CodigoError.CANCELADO and not (tmp_path / "raro.edicion.mp4").exists()
+
+
+@necesita_ffmpeg
+def test_descarga_para_edicion(servidor_medios, tmp_path):
+    r = descargar(f"{servidor_medios.base}/clip.mp4", replace(OP, editable=True), tmp_path / "t", permitir_interno=True)
+    video = [a for a in r.archivos if a.rol == RolArchivo.VIDEO]
+    assert len(video) == 1 and video[0].ruta.suffix == ".mp4"
+    assert codecs_de(video[0].ruta, FFMPEG_DIR) == ("h264", "aac")
+
+
+@necesita_ffmpeg
+def test_conversion_para_edicion_informa_el_progreso(tmp_path):
+    origen = _clip(tmp_path / "raro.mkv", "-c:v", "mpeg4", "-c:a", "mp2")
+    vistos = []
+    preparar_para_edicion(origen, FFMPEG_DIR, progreso=vistos.append)
+    assert vistos and all(0 <= x <= 99 for x in vistos)
+
+
+def test_si_la_tarjeta_grafica_falla_se_usa_el_procesador(tmp_path, monkeypatch):
+    import gestor.descargador as d
+    llamadas = []
+
+    def falso(args, duracion, cancelar, progreso):
+        llamadas.append(args[args.index("-c:v") + 1])
+        if args[args.index("-c:v") + 1] != "libx264":
+            return 1, "fallo de la tarjeta"
+        Path(args[-1]).write_bytes(b"ok")
+        return 0, ""
+    monkeypatch.setattr(d, "codecs_de", lambda r, f: ("vp9", "opus"))
+    monkeypatch.setattr(d, "codificador_h264", lambda f: ("h264_qsv", ["-c:v", "h264_qsv"]))
+    monkeypatch.setattr(d, "_ejecutar_ffmpeg", falso)
+    origen = tmp_path / "v.webm"; origen.write_bytes(b"x")
+    assert d.preparar_para_edicion(origen, None) == tmp_path / "v.mp4"
+    assert llamadas == ["h264_qsv", "h264_qsv", "libx264"]        # gráfica decodificando, gráfica sola, procesador
+
+
+def test_intentos_de_conversion_decodifican_con_la_grafica_cuando_pueden(monkeypatch):
+    import gestor.descargador as d
+    monkeypatch.setattr(d, "codificador_h264", lambda f: ("h264_qsv", ["-c:v", "h264_qsv", "-pix_fmt", "nv12"]))
+    vp9 = d.intentos_conversion(None, "vp9")
+    assert vp9[0] == (["-hwaccel", "qsv", "-hwaccel_output_format", "qsv"], ["-c:v", "h264_qsv"]) and len(vp9) == 3
+    av1 = d.intentos_conversion(None, "av1")                       # AV1: la HD 630 no lo decodifica
+    assert [e for e, _ in av1] == [[], []]
+
+
+# --- descargar solo unos minutos ----------------------------------------------------------------
+def test_estrategia_de_trozos_elige_lo_mas_rapido():
+    from gestor.descargador import estrategia_tramos
+    assert estrategia_tramos(OpcionesDescarga()) is None
+    assert estrategia_tramos(OpcionesDescarga(tramos=((60, 120),), duracion_video=7200)) == "rangos"      # 1 min de 2 h
+    assert estrategia_tramos(OpcionesDescarga(tramos=((60, 240),), duracion_video=600)) == "completo"     # 3 min de 10 min
+    assert estrategia_tramos(OpcionesDescarga(tramos=((60, 240),))) == "rangos"                            # sin duración
+
+
+def test_trozos_por_rangos_llegan_a_yt_dlp():
+    h = lambda d: None  # noqa: E731
+    p = construir_opciones_ytdlp(OpcionesDescarga(tramos=((80, 95),), corte_exacto=True, duracion_video=7200), Path("x"), h)
+    assert callable(p["download_ranges"]) and "section_start" in p["outtmpl"]
+    assert "force_keyframes_at_cuts" not in p                         # yt-dlp convertiría con x264 «medium» (lo más lento)
+    assert "-c:v" in p["external_downloader_args"]["ffmpeg_o"] and p["format_sort"][1] == "vcodec:h264"
+    assert "download_ranges" not in construir_opciones_ytdlp(OpcionesDescarga(tramos=((1, 300),), duracion_video=600), Path("x"), h)
+
+
+@pytest.mark.parametrize("tramos", [((5, 3),), ((-1, 3),), ((0, 99999),), tuple((i, i + 1) for i in range(11))])
+def test_trozos_invalidos_se_rechazan(tramos):
+    with pytest.raises(ErrorGestor):
+        OpcionesDescarga(tramos=tramos).validar()
+    with pytest.raises(ErrorGestor):
+        OpcionesDescarga(modo="portada", tramos=((1, 2),)).validar()
+
+
+@necesita_ffmpeg
+@pytest.mark.parametrize("exacto", [False, True])
+def test_cortar_tramos_en_el_equipo(tmp_path, exacto):
+    from gestor.descargador import cortar_tramos
+    origen = subprocess.run([str(FFMPEG_DIR / "ffmpeg"), "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=6:size=160x120:rate=15",
+                             "-f", "lavfi", "-i", "sine=duration=6", "-shortest", "-g", "15", "-pix_fmt", "yuv420p", str(tmp_path / "v.mp4")], check=True)
+    trozos = cortar_tramos(tmp_path / "v.mp4", ((1.0, 2.5), (4.0, 5.0)), exacto, FFMPEG_DIR)
+    assert [t.name for t in trozos] == ["v (00-00-01 a 00-00-02).mp4", "v (00-00-04 a 00-00-05).mp4"]
+    assert not (tmp_path / "v.mp4").exists()
+    assert abs(_duracion(trozos[0]) - 1.5) < (0.15 if exacto else 1.1)
+
+
+@necesita_ffmpeg
+def test_descarga_de_un_trozo(servidor_medios, tmp_path):
+    o = replace(OP, tramos=((0.5, 1.5),), corte_exacto=True, duracion_video=2.0)     # trozo largo: baja todo y corta aquí
+    r = descargar(f"{servidor_medios.base}/clip.mp4", o, tmp_path / "t", permitir_interno=True)
+    video = [a for a in r.archivos if a.rol == RolArchivo.VIDEO]
+    assert len(video) == 1 and "(00-00-00 a 00-00-01)" in video[0].ruta.name
+    assert abs(_duracion(video[0].ruta) - 1.0) < 0.15
+
+
+@necesita_ffmpeg
+def test_ffmpeg_para_trozos_aunque_yt_dlp_ya_lo_hubiera_buscado(monkeypatch):
+    # El fallo real: una descarga normal hacía que yt-dlp recordara «FFmpeg no está» y luego los trozos fallaban.
+    from yt_dlp.downloader.external import FFmpegFD
+    from gestor.descargador import asegurar_ffmpeg_en_path
+    monkeypatch.setenv("PATH", r"C:\Windows\System32")
+    FFmpegFD.available()                       # yt-dlp lo busca sin éxito y lo recuerda
+    asegurar_ffmpeg_en_path(FFMPEG_DIR)
+    assert FFmpegFD.available() is True

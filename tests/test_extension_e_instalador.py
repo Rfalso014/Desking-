@@ -18,12 +18,14 @@ def test_manifest_de_la_extension():
     m = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))
     assert m["manifest_version"] == 3
     # Permisos mínimos: nada de acceso a todos los sitios.
-    assert set(m["permissions"]) == {"contextMenus", "nativeMessaging", "storage", "activeTab", "scripting"}
+    assert set(m["permissions"]) == {"contextMenus", "nativeMessaging", "storage", "activeTab", "scripting", "sidePanel", "notifications"}
     assert "host_permissions" not in m
     # El botón flotante necesita un content script en las páginas web (solo http/https; nunca file:// ni chrome://).
     cs = m["content_scripts"]
     assert len(cs) == 1 and cs[0]["js"] == ["content.js"] and set(cs[0]["matches"]) == {"http://*/*", "https://*/*"}
-    for ruta in [m["background"]["service_worker"], m["action"]["default_popup"], *m["icons"].values()]:
+    # La interfaz es una barra lateral (se abre con el ícono), no una ventanita emergente.
+    assert "default_popup" not in m["action"]
+    for ruta in [m["background"]["service_worker"], m["side_panel"]["default_path"], *m["icons"].values()]:
         assert (EXT / ruta).exists(), ruta
 
 
@@ -45,7 +47,7 @@ def test_el_popup_solo_usa_elementos_que_existen_en_el_html():
     html = (EXT / "popup.html").read_text(encoding="utf-8")
     js = (EXT / "popup.js").read_text(encoding="utf-8")
     ids_html = set(re.findall(r'id="([^"]+)"', html))
-    usados = set(re.findall(r'\$\("([^"]+)"\)', js)) | {f"pestana-{n}" for n in ("pagina", "cola", "ajustes")}
+    usados = set(re.findall(r'\$\("([^"]+)"\)', js)) | {f"pestana-{n}" for n in ("pagina", "cola", "recortar", "edicion", "ajustes")}
     assert usados - ids_html == set(), f"El JS usa ids que no existen en el HTML: {usados - ids_html}"
     assert "popup.js" in html and 'type="module"' in html
 
@@ -108,9 +110,15 @@ def test_el_boton_flotante_y_el_menu_no_descargan_solo_anaden_a_la_lista():
     assert "detectarConLoElegido(" in manejador_menu
     manejador_boton = fondo[fondo.index('msg.tipo === "detectar-pagina"'):]
     assert "detectarConLoElegido(" in manejador_boton
-    funcion = fondo[fondo.index("async function detectarConLoElegido"):fondo.index("async function avisar")]
-    assert 'enviar("detectar"' in funcion
+    funcion = fondo[fondo.index("async function detectarConLoElegido"):fondo.index("async function recortarConLoElegido")]
+    assert 'enviarConLoElegido("detectar"' in funcion
     assert "detectar-pagina" in contenido and "encolar" not in contenido
+    # La única descarga directa es ✂ «Descargar trozo»: la pide un clic real del usuario en el panel sobre el video.
+    assert fondo.count('"encolar"') == 1
+    recorte = fondo[fondo.index("async function recortarConLoElegido"):fondo.index("async function enviarConLoElegido")]
+    assert 'enviarConLoElegido("encolar"' in recorte
+    boton_recorte = contenido[contenido.index('rc.descargar.addEventListener("click"'):]
+    assert "e.isTrusted" in boton_recorte.splitlines()[1] and 'tipo: "recortar"' in boton_recorte
 
 
 def test_autoinicio_escribe_y_quita_en_una_clave_de_prueba():

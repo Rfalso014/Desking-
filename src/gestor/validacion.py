@@ -10,8 +10,9 @@ dominio público podría apuntar a una IP privada vía DNS; eso se cubrirá en l
 Fase 13 (pruebas y seguridad integrales).
 """
 import ipaddress
+import re
 import socket
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .modelos import CodigoError, ErrorGestor
 
@@ -59,6 +60,27 @@ def validar_url(url: str, *, permitir_interno: bool = False) -> str:
     if not permitir_interno and _es_destino_interno(host):
         raise _invalida("No se admiten direcciones locales ni de red privada.")
     return url
+
+
+_PREFIJOS = re.compile(r"^(www|m|mobile|web|old|music)\.")
+
+
+def clave_video(url: str) -> str:
+    """Identificador para saber si dos enlaces son el MISMO video (copia de claveVideo en extension/util.js).
+
+    youtu.be/ID, youtube.com/watch?v=ID&t=30 y youtube.com/shorts/ID dan lo mismo; en otros sitios cuenta
+    el dominio + la ruta (sin «/» final ni #...), más el parámetro v si lo hay.
+    """
+    p = urlsplit(url)
+    host = _PREFIJOS.sub("", (p.hostname or "").lower())
+    v = parse_qs(p.query).get("v", [""])[0]
+    if host == "youtu.be":
+        return f"youtube:{p.path.strip('/')}"
+    if host.endswith("youtube.com"):
+        m = re.match(r"^/(shorts|live|embed)/([\w-]+)", p.path)
+        if v or m:
+            return f"youtube:{v or m.group(2)}"
+    return host + p.path.rstrip("/") + (f"?v={v}" if v else "")
 
 
 def verificar_resolucion(url: str) -> None:

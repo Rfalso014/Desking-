@@ -84,7 +84,7 @@ def test_tarjetas_por_estado_y_botones(ventana):
     assert [b.text() for b in fallida._botones] == ["Reintentar", "Eliminar"]
     assert "no se pudo determinar" in fallida.error.text() and "Reintenta" in fallida.error.text()   # no inventa causas
     assert [b.text() for b in detectada._botones] == ["Descargar", "Eliminar"]
-    assert "MB/s" in v.resumen.text() and "1 descargando" in v.resumen.text()
+    assert "MB/s" in v.dato_velocidad.text() and v.dato_descargando.text() == "1" and v.dato_espera.text() == "1"
 
 
 def test_las_descargas_activas_van_arriba(ventana):

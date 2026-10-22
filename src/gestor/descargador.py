@@ -5,9 +5,13 @@ Cuando termina bien, el organizador (organizador.py) mueve los archivos a su
 destino final. Así nunca quedan archivos a medias en las carpetas del usuario
 y una tarea cancelada se limpia borrando solo su carpeta.
 """
+import json
+import os
 import re
 import shutil
+import subprocess
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -15,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp
-from yt_dlp.utils import DownloadCancelled
+from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
+from yt_dlp.utils import DownloadCancelled, download_range_func
 
-from .catalogo import CONTENEDORES_VIDEO, FORMATOS_AUDIO, MODOS, _IDIOMA
+from .catalogo import CONTENEDORES_VIDEO, FORMATOS_AUDIO, MAX_TRAMOS, MODOS, _IDIOMA, _ok_tramos
 from .errores import traducir_excepcion
 from .extractor import normalizar_info
 from .modelos import CodigoError, ErrorGestor, InfoContenido
@@ -52,6 +57,10 @@ class OpcionesDescarga:
     subtitulos: tuple[str, ...] = ()          # idiomas, p. ej. ("es", "en")
     subtitulos_automaticos: bool = True       # usar automáticos si no hay manuales
     portada: bool = True
+    editable: bool = False                    # video listo para editar: MP4 con H.264 + AAC
+    tramos: tuple[tuple[float, float], ...] = ()   # solo estos trozos (inicio, fin) en segundos; vacío = todo
+    corte_exacto: bool = False                # cortar en el segundo exacto (convierte) o en el fotograma clave (rápido)
+    duracion_video: float | None = None       # la pone la cola tras analizar: decide cómo bajar los trozos
     plantilla_nombre: str = "%(title).120B [%(id)s]"
     ffmpeg_dir: Path | None = None
     fragmentos: int = 8                       # fragmentos que se bajan a la vez
@@ -79,6 +88,10 @@ class OpcionesDescarga:
             raise malo("El tamaño de trozo no es válido.")
         if self.altura_max is not None and not (isinstance(self.altura_max, int) and 100 <= self.altura_max <= 8640):
             raise malo("La altura máxima debe estar entre 100 y 8640.")
+        if not _ok_tramos(self.tramos) or len(self.tramos) > MAX_TRAMOS:
+            raise malo("Los trozos no son válidos: cada uno necesita un inicio menor que su fin.")
+        if self.tramos and self.modo not in ("video", "audio"):
+            raise malo("Los trozos solo sirven para descargar video o audio.")
         if len(self.subtitulos) > 20 or not all(_IDIOMA.match(i) for i in self.subtitulos):
             raise malo("Código de idioma de subtítulos no válido.")
         # La plantilla la interpreta yt-dlp: prohibimos separadores de ruta
@@ -120,14 +133,30 @@ def construir_selector(o: OpcionesDescarga) -> str:
     if o.modo == "audio":
         # Si el destino es m4a, preferimos una pista m4a ya existente (sin recodificar).
         return "ba[ext=m4a]/ba/b" if o.formato_audio == "m4a" else "ba/b"
-    if o.altura_max:
-        h = o.altura_max
-        return f"bv*[height<=?{h}]+ba/b[height<=?{h}]"
-    return "bv*+ba/b"
+    h = f"[height<=?{o.altura_max}]" if o.altura_max else ""
+    return f"bv*{h}+ba/b{h}"
 
 
-def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
-                             hook_progreso: Callable[[dict], None]) -> dict[str, Any]:
+# Bajar un trozo suelto va unas 20-25 veces más lento que el video entero (medido en YouTube: FFmpeg usa una sola
+# conexión y YouTube la limita). Si los trozos suman mucho, conviene bajar todo y cortar aquí.
+FACTOR_TROZOS = 20
+
+
+def estrategia_tramos(o: OpcionesDescarga) -> str | None:
+    """None (sin trozos) | "rangos" (yt-dlp baja solo los trozos) | "completo" (se baja todo y se corta en el equipo)."""
+    if not o.tramos:
+        return None
+    total = sum(b - a for a, b in o.tramos)
+    return "completo" if o.duracion_video and total * FACTOR_TROZOS > o.duracion_video else "rangos"
+
+
+def _hms(seg: float) -> str:
+    s = int(seg)
+    return f"{s // 3600:02d}-{s % 3600 // 60:02d}-{s % 60:02d}"
+
+
+def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path, hook_progreso: Callable[[dict], None],
+                             codificador_rangos: list[str] | None = None) -> dict[str, Any]:
     p: dict[str, Any] = {
         "format": construir_selector(o),
         "paths": {"home": str(carpeta)},
@@ -155,6 +184,11 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
 
     if o.modo in ("subtitulos", "portada"):
         p["skip_download"] = True      # no se baja el video: solo los extras
+    elif o.modo == "video" and (o.editable or (o.tramos and o.corte_exacto)):
+        # Va a haber que convertir: primero la resolución y, a igual resolución, H.264 > VP9 > AV1 (lo que la gráfica
+        # decodifica; AV1 4K va casi al doble de lento en un equipo sin decodificador AV1) y audio AAC.
+        p["format_sort"] = ["res", "vcodec:h264", "acodec:aac"]
+        p["merge_output_format"] = "mp4"
     elif o.modo == "video":
         if o.contenedor_video != "mejor":
             p["merge_output_format"] = o.contenedor_video  # solo une pistas (sin recodificar)
@@ -163,6 +197,16 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path,
         if o.formato_audio not in _SIN_CALIDAD:
             q["preferredquality"] = "192"
         pp.append(q)
+
+    if estrategia_tramos(o) == "rangos":
+        p["download_ranges"] = download_range_func(None, [tuple(t) for t in o.tramos])
+        if o.corte_exacto and o.modo == "video":
+            codificador_rangos = codificador_rangos or codificador_h264(o.ffmpeg_dir)[1]
+            # yt-dlp, con «force_keyframes_at_cuts», convierte con x264 «medium» (lo más lento). En su lugar se le pasa
+            # a FFmpeg el codificador rápido de este equipo: al convertir, FFmpeg ya corta en el segundo exacto.
+            p["external_downloader_args"] = {"ffmpeg_o": [*codificador_rangos, "-c:a", "aac", "-b:a", "192k"]}
+        # Título más corto que el normal: el tramo alarga el nombre y Windows no admite rutas de más de 260 caracteres.
+        p["outtmpl"] = o.plantilla_nombre.replace("%(title).120B", "%(title).90B") + " (%(section_start>%H-%M-%S)s a %(section_end>%H-%M-%S)s).%(ext)s"
 
     if o.subtitulos:
         p.update(writesubtitles=True, writeautomaticsub=o.subtitulos_automaticos,
@@ -179,6 +223,197 @@ def _necesita_ffmpeg(o: OpcionesDescarga) -> bool:
         return True      # la conversión de subtítulos/portada usa FFmpeg
     solo_pista_original = o.modo == "audio" and o.formato_audio == "original" and not o.subtitulos and not o.portada
     return not solo_pista_original
+
+
+def _ejecutable(ffmpeg_dir: Path | None, nombre: str) -> str:
+    for c in ((ffmpeg_dir / f"{nombre}.exe", ffmpeg_dir / nombre) if ffmpeg_dir else ()):
+        if c.exists():
+            return str(c)
+    return shutil.which(nombre) or nombre
+
+
+_SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # que no parpadee una consola en Windows
+
+
+def codecs_de(ruta: Path, ffmpeg_dir: Path | None) -> tuple[str | None, str | None]:
+    """(códec de video, códec de audio) del archivo según ffprobe; None si esa pista no existe."""
+    r = subprocess.run([_ejecutable(ffmpeg_dir, "ffprobe"), "-v", "error", "-show_entries", "stream=codec_type,codec_name",
+                        "-of", "json", str(ruta)], capture_output=True, text=True, timeout=60, creationflags=_SIN_VENTANA)
+    pistas = json.loads(r.stdout or "{}").get("streams", [])
+    primero = lambda tipo: next((s.get("codec_name") for s in pistas if s.get("codec_type") == tipo), None)
+    return primero("video"), primero("audio")
+
+
+# Codificadores H.264 por tarjeta gráfica (NVIDIA, Intel Quick Sync, AMD): convierten varias veces más rápido
+# que el procesador. Se prueba cuál funciona en este equipo; si ninguno, se usa libx264 (procesador).
+_CODIFICADORES_GPU = [
+    ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "19", "-b:v", "0", "-pix_fmt", "yuv420p"]),
+    ("h264_qsv", ["-c:v", "h264_qsv", "-preset", "veryfast", "-look_ahead", "0", "-global_quality", "20", "-pix_fmt", "nv12"]),
+    ("h264_amf", ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "18", "-qp_p", "20", "-pix_fmt", "nv12"]),
+]
+_X264 = ("libx264", ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"])
+_codificador_elegido: dict[str, tuple[str, list[str]]] = {}
+
+
+def codificador_h264(ffmpeg_dir: Path | None) -> tuple[str, list[str]]:
+    """(nombre, argumentos) del codificador H.264 más rápido que funciona aquí. Se prueba una sola vez."""
+    clave = str(ffmpeg_dir)
+    if clave not in _codificador_elegido:
+        _codificador_elegido[clave] = _X264
+        for nombre, args in _CODIFICADORES_GPU:
+            try:
+                r = subprocess.run([_ejecutable(ffmpeg_dir, "ffmpeg"), "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x144:d=0.2",
+                                    *args, "-f", "null", "-"], capture_output=True, timeout=30, creationflags=_SIN_VENTANA)
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if r.returncode == 0:
+                _codificador_elegido[clave] = (nombre, args)
+                break
+    return _codificador_elegido[clave]
+
+
+# Lo que la gráfica Intel/NVIDIA decodifica por hardware (AV1 solo en gráficas recientes: se deja al procesador).
+_DECODIFICA_GPU = {"h264", "hevc", "vp9"}
+_HWACCEL = {"h264_qsv": ["-hwaccel", "qsv", "-hwaccel_output_format", "qsv"], "h264_nvenc": ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]}
+
+
+def intentos_conversion(ffmpeg_dir: Path | None, codec_origen: str | None) -> list[tuple[list[str], list[str]]]:
+    """[(argumentos de entrada, argumentos de video)] del más rápido al más seguro.
+
+    Medido en un i7-7700 con HD 630, 20 s de VP9 4K: decodificar con la gráfica + Quick Sync 17,7 s; solo Quick Sync
+    23 s; x264 31,8 s. Si un intento falla con un video concreto, se prueba el siguiente.
+    """
+    nombre, args = codificador_h264(ffmpeg_dir)
+    salida: list[tuple[list[str], list[str]]] = []
+    if nombre in _HWACCEL and codec_origen in _DECODIFICA_GPU:
+        sin_pix = [x for i, x in enumerate(args) if x != "-pix_fmt" and (i == 0 or args[i - 1] != "-pix_fmt")]
+        salida.append((_HWACCEL[nombre], sin_pix))          # los fotogramas no salen de la gráfica
+    salida.append(([], args))
+    if nombre != _X264[0]:
+        salida.append(([], _X264[1]))
+    return salida
+
+
+def _duracion(ruta: Path, ffmpeg_dir: Path | None) -> float | None:
+    try:
+        r = subprocess.run([_ejecutable(ffmpeg_dir, "ffprobe"), "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(ruta)],
+                           capture_output=True, text=True, timeout=60, creationflags=_SIN_VENTANA)
+        return float(r.stdout.strip()) or None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _ejecutar_ffmpeg(args: list[str], duracion: float | None, cancelar: threading.Event | None,
+                     progreso: Callable[[float], None] | None) -> tuple[int, str]:
+    """Ejecuta FFmpeg informando el % convertido (-progress) y cortándolo si se cancela. Devuelve (código, errores)."""
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=_SIN_VENTANA)
+    errores: list[str] = []
+    threading.Thread(target=lambda: errores.extend(proc.stderr), daemon=True).start()   # que no se llene la tubería
+
+    def leer_progreso():
+        for linea in proc.stdout:
+            if progreso and duracion and linea.startswith("out_time_us="):
+                try:
+                    progreso(min(99.0, round(int(linea.split("=", 1)[1]) / 1e6 * 100 / duracion, 1)))
+                except ValueError:
+                    pass
+    threading.Thread(target=leer_progreso, daemon=True).start()
+    while proc.poll() is None:
+        if cancelar is not None and cancelar.is_set():
+            proc.kill(); proc.wait()
+            return -1, "cancelado"
+        time.sleep(0.3)
+    return proc.returncode, "".join(errores)[-500:]
+
+
+def preparar_para_edicion(ruta: Path, ffmpeg_dir: Path | None, cancelar: threading.Event | None = None,
+                          progreso: Callable[[float], None] | None = None) -> Path:
+    """Deja el video como MP4 con H.264 + AAC (lo abren Premiere, DaVinci, CapCut, Final Cut, Vegas...).
+
+    Si ya lo es no hace nada; si solo falla el contenedor o una pista, copia lo que sirve y convierte el resto.
+    Para convertir usa la tarjeta gráfica si puede (mucho más rápido) y, si falla, el procesador.
+    """
+    v, a = codecs_de(ruta, ffmpeg_dir)
+    if v is None:
+        return ruta                                   # no es un video (p. ej. solo audio): nada que hacer
+    if v == "h264" and a in ("aac", None) and ruta.suffix.lower() == ".mp4":
+        return ruta
+    temporal = ruta.with_name(f"{ruta.stem}.edicion.mp4")
+    duracion = _duracion(ruta, ffmpeg_dir)
+    intentos = [([], ["-c:v", "copy"])] if v == "h264" else intentos_conversion(ffmpeg_dir, v)
+    codigo, errores = 1, ""
+    for entrada, video in intentos:
+        args = [_ejecutable(ffmpeg_dir, "ffmpeg"), "-y", "-v", "error", "-nostats", "-progress", "pipe:1",
+                *entrada, "-i", str(ruta), "-map", "0:v:0", "-map", "0:a:0?", *video]
+        args += ["-c:a", "copy"] if a == "aac" else ["-c:a", "aac", "-b:a", "192k"]
+        args += ["-movflags", "+faststart", str(temporal)]
+        codigo, errores = _ejecutar_ffmpeg(args, duracion, cancelar, progreso)
+        if codigo == -1:
+            temporal.unlink(missing_ok=True)
+            raise ErrorGestor(CodigoError.CANCELADO, "La descarga fue cancelada.")
+        if codigo == 0:
+            break
+        temporal.unlink(missing_ok=True)          # la tarjeta gráfica falló con este video: se reintenta con el procesador
+    if codigo != 0:
+        raise ErrorGestor(CodigoError.PROCESAMIENTO, "No se pudo convertir el video a un formato para edición.",
+                          causa="FFmpeg no pudo recodificar el archivo descargado.",
+                          solucion="Reintenta, o desactiva «Para edición» y conviértelo con tu editor.",
+                          detalle_tecnico=errores or None)
+    final = ruta.with_suffix(".mp4")
+    ruta.unlink()
+    temporal.replace(final)
+    return final
+
+
+def cortar_tramos(ruta: Path, tramos: tuple[tuple[float, float], ...], exacto: bool, ffmpeg_dir: Path | None,
+                  cancelar: threading.Event | None = None) -> list[Path]:
+    """Corta en el equipo los trozos de un archivo ya descargado (estrategia «completo») y borra el original.
+
+    Rápido: copia sin convertir y empieza en el fotograma clave anterior (puede adelantarse unos segundos).
+    Exacto: convierte cada trozo (con la tarjeta gráfica si se puede) para que empiece en el segundo pedido.
+    """
+    v, _a = codecs_de(ruta, ffmpeg_dir)
+    salidas = []
+    for a, b in tramos:
+        convertir = exacto and v is not None
+        destino = ruta.with_name(f"{ruta.stem} ({_hms(a)} a {_hms(b)}){'.mp4' if convertir else ruta.suffix}")
+        base = [_ejecutable(ffmpeg_dir, "ffmpeg"), "-y", "-v", "error", "-nostats", "-progress", "pipe:1"]
+        corte = ["-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", str(ruta), "-map", "0:v:0?", "-map", "0:a:0?"]
+        intentos = [(e, [*vid, "-c:a", "aac", "-b:a", "192k"]) for e, vid in intentos_conversion(ffmpeg_dir, v)] \
+            if convertir else [([], ["-c", "copy", "-avoid_negative_ts", "make_zero"])]
+        codigo, errores = 1, ""
+        for entrada, extra in intentos:
+            codigo, errores = _ejecutar_ffmpeg([*base, *entrada, *corte, *extra, str(destino)], None, cancelar, None)
+            if codigo in (0, -1):
+                break
+            destino.unlink(missing_ok=True)
+        if codigo == -1:
+            for x in [destino, *salidas]:
+                x.unlink(missing_ok=True)
+            raise ErrorGestor(CodigoError.CANCELADO, "La descarga fue cancelada.")
+        if codigo != 0:
+            raise ErrorGestor(CodigoError.PROCESAMIENTO, "No se pudo cortar el trozo del video.",
+                              solucion="Reintenta, o prueba con «Corte exacto».", detalle_tecnico=errores or None)
+        salidas.append(destino)
+    ruta.unlink()
+    return salidas
+
+
+def asegurar_ffmpeg_en_path(ffmpeg_dir: Path | None) -> None:
+    """yt-dlp busca FFmpeg en el PATH (no en ffmpeg_location) para bajar trozos: se añade su carpeta.
+
+    Además yt-dlp RECUERDA «no encontrado» la primera vez que lo busca (p. ej. en una descarga normal anterior):
+    se borra ese recuerdo para que vuelva a buscarlo con el PATH nuevo.
+    """
+    if not ffmpeg_dir:
+        return
+    if str(ffmpeg_dir) not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = str(ffmpeg_dir) + os.pathsep + os.environ.get("PATH", "")
+    cache = getattr(FFmpegPostProcessor, "_version_cache", None)
+    if isinstance(cache, dict):
+        for nombre in ("ffmpeg", "ffprobe"):
+            if not cache.get(nombre):
+                cache.pop(nombre, None)
 
 
 def _clasificar(carpeta: Path, modo: str) -> tuple[ArchivoDescargado, ...]:
@@ -209,6 +444,8 @@ def descargar(url: str, opciones: OpcionesDescarga, carpeta_trabajo: Path, *,
         raise traducir_excepcion(RuntimeError("ffmpeg not found"))
 
     carpeta_trabajo.mkdir(parents=True, exist_ok=True)
+    if opciones.tramos:
+        asegurar_ffmpeg_en_path(opciones.ffmpeg_dir)
     if tamano_estimado:
         libre = shutil.disk_usage(carpeta_trabajo).free
         if libre < tamano_estimado * 1.2:   # 20 % de margen para archivos temporales
@@ -232,9 +469,21 @@ def descargar(url: str, opciones: OpcionesDescarga, carpeta_trabajo: Path, *,
         progreso(Progreso(estado, pct, d.get("speed"), d.get("eta"), hecho, total,
                           Path(d["filename"]).name if d.get("filename") else None))
 
+    def bajar(codificador_rangos: list[str] | None = None) -> dict:
+        with yt_dlp.YoutubeDL(construir_opciones_ytdlp(opciones, carpeta_trabajo, hook, codificador_rangos)) as ydl:
+            return ydl.sanitize_info(ydl.extract_info(url, download=True))
+
     try:
-        with yt_dlp.YoutubeDL(construir_opciones_ytdlp(opciones, carpeta_trabajo, hook)) as ydl:
-            info = ydl.sanitize_info(ydl.extract_info(url, download=True))
+        try:
+            info = bajar()
+        except DescargaCancelada:
+            raise
+        except Exception:
+            # Trozo con corte exacto: si el codificador de la tarjeta gráfica falla con este video, se reintenta con x264.
+            if not (estrategia_tramos(opciones) == "rangos" and opciones.corte_exacto and opciones.modo == "video"
+                    and codificador_h264(opciones.ffmpeg_dir)[0] != _X264[0]):
+                raise
+            info = bajar(_X264[1])
     except DescargaCancelada:
         raise ErrorGestor(CodigoError.CANCELADO, "La descarga fue cancelada.") from None
     except ErrorGestor:
@@ -243,6 +492,21 @@ def descargar(url: str, opciones: OpcionesDescarga, carpeta_trabajo: Path, *,
         raise traducir_excepcion(exc) from exc
 
     archivos = _clasificar(carpeta_trabajo, opciones.modo)
+    if estrategia_tramos(opciones) == "completo":
+        if progreso:
+            progreso(Progreso("procesando"))
+        for a in archivos:
+            if a.rol in (RolArchivo.VIDEO, RolArchivo.AUDIO):
+                cortar_tramos(a.ruta, opciones.tramos, opciones.corte_exacto, opciones.ffmpeg_dir, cancelar)
+        archivos = _clasificar(carpeta_trabajo, opciones.modo)
+    if opciones.editable and opciones.modo == "video":
+        for a in archivos:
+            if a.rol == RolArchivo.VIDEO:
+                if progreso:
+                    progreso(Progreso("procesando"))
+                preparar_para_edicion(a.ruta, opciones.ffmpeg_dir, cancelar,
+                                      (lambda pct: progreso(Progreso("procesando", pct))) if progreso else None)
+        archivos = _clasificar(carpeta_trabajo, opciones.modo)
     roles = {a.rol for a in archivos}
     if opciones.modo == "subtitulos" and RolArchivo.SUBTITULO not in roles:
         raise ErrorGestor(CodigoError.SUBTITULOS_INEXISTENTES, "No hay subtítulos en los idiomas pedidos.",

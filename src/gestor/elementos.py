@@ -1,7 +1,8 @@
 """Qué descargar: de casillas («video», «audio», «subtítulos», «portada») a opciones de descarga.
 
 El usuario marca elementos combinables; internamente cada DESCARGA tiene un «modo»:
-  - video     -> el video con su audio (+ subtítulos y portada si se marcaron)
+  - video     -> el video con su audio (+ subtítulos y portada si se marcaron); con «para edición»
+                 sale en MP4 H.264 + AAC (lleva "editable": True)
   - audio     -> solo el audio (+ subtítulos y portada si se marcaron)
   - subtitulos-> solo subtítulos (y portada, si se marcó)
   - portada   -> solo la portada
@@ -37,7 +38,7 @@ def parsear_idiomas(texto: str | list | tuple | None) -> list[str]:
 def opciones_desde_elementos(*, video: bool = True, audio: bool = False, subtitulos: bool | list = False,
                              idiomas: list[str] | None = None, portada: bool = False,
                              altura: int | str | None = None, formato_audio: str | None = None,
-                             carpeta: str | None = None) -> list[dict]:
+                             carpeta: str | None = None, editable: bool = False) -> list[dict]:
     """Devuelve 1 o 2 diccionarios de opciones (uno por descarga). Lanza ErrorGestor si no hay nada marcado."""
     langs = parsear_idiomas(idiomas or [])
     quiere_subs = bool(subtitulos)
@@ -52,6 +53,8 @@ def opciones_desde_elementos(*, video: bool = True, audio: bool = False, subtitu
         return {"subtitulos": langs if (quiere_subs and con_subs) else [], "portada": bool(portada and con_portada)}
 
     def con_calidad(d: dict) -> dict:
+        if editable:
+            d["editable"] = True
         if altura == "mejor":
             d["altura_max"] = None
         elif altura not in (None, ""):

@@ -4,6 +4,7 @@
     pythonw -m gestor.app           (sin consola; lo usa el host nativo para abrirla)
 """
 import sys
+import time
 
 from .cola import GestorCola
 from .config import carpeta_datos, localizar_ffmpeg
@@ -77,24 +78,49 @@ def main() -> int:
     from . import __version__
     app.setApplicationVersion(__version__)
     db, cola = crear_nucleo()
-    try:
-        vinculacion = Vinculacion(db)
-        ipc = ServidorIPC(cola, vinculacion=vinculacion)       # falla si ya hay otra copia abierta (la tubería está ocupada)
-    except OSError:
-        if not segundo_plano and not _pedir_mostrar():
-            QMessageBox.information(None, "Gestor de Descargas", "La aplicación ya está abierta.")
-        return 0
+    vinculacion = Vinculacion(db)
+    # Tras «Actualizar» la copia anterior tarda un momento en cerrarse: se espera a que libere la tubería.
+    intentos = 40 if "--reiniciado" in sys.argv else 1
+    for i in range(intentos):
+        try:
+            ipc = ServidorIPC(cola, vinculacion=vinculacion)   # falla si ya hay otra copia abierta (la tubería está ocupada)
+            break
+        except OSError:
+            if i + 1 < intentos:
+                time.sleep(0.5)
+                continue
+            if not segundo_plano and not _pedir_mostrar():
+                QMessageBox.information(None, "Gestor de Descargas", "La aplicación ya está abierta.")
+            db.cerrar()
+            return 0
     ipc.iniciar()
     cola.iniciar()
     cola.recuperar()
     cola.limpiar_temporales()
-    ventana = VentanaPrincipal(cola, vinculacion)
+    from .actualizador import ARGS_INSTALADOR, Actualizador, comando_reinicio, lanzar_desacoplado
+    from .modelos import ESTADOS_ACTIVOS
+    actualizador = Actualizador(hay_descargas=lambda: bool(cola.listar(estados=list(ESTADOS_ACTIVOS), limite=1)))
+    ventana = VentanaPrincipal(cola, vinculacion, actualizador)
 
     class _Aviso(QObject):               # el IPC corre en otro hilo; Qt exige tocar la ventana desde el principal
         mostrar = Signal()
+        reiniciar = Signal()
+        instalar = Signal(str)
     aviso = _Aviso()
     aviso.mostrar.connect(ventana.mostrar_al_frente)
     ipc.manejador.al_mostrar = aviso.mostrar.emit
+
+    def _cerrar_para_actualizar(cmd: list[str]) -> None:
+        lanzar_desacoplado(cmd)
+        ventana.saliendo = True
+        app.quit()
+    aviso.reiniciar.connect(lambda: _cerrar_para_actualizar(comando_reinicio(ventana.isVisible())))
+    aviso.instalar.connect(lambda ruta: _cerrar_para_actualizar([ruta, *ARGS_INSTALADOR]))   # el instalador vuelve a abrir la app
+    actualizador.al_reiniciar = aviso.reiniciar.emit
+    actualizador.al_instalar = lambda ruta: aviso.instalar.emit(str(ruta))
+    actualizador.al_abrir_url = lambda url: __import__("webbrowser").open(url)
+    ipc.manejador.actualizador = actualizador
+    actualizador.buscar_si_toca()
 
     bandeja = None
     if QSystemTrayIcon.isSystemTrayAvailable():

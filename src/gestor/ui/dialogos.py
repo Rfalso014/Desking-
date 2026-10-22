@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from .. import reglas
 from ..config import Preferencias
 from ..elementos import opciones_desde_elementos, parsear_idiomas
+from ..extractor import texto_tamanos
 from ..modelos import ErrorGestor
 
 SIN_CAMBIO = ""
@@ -119,6 +120,7 @@ class AnalisisDialog(QDialog):
         txt += [f"Título: {info.titulo}", f"Sitio: {info.sitio}", f"Autor: {info.autor or '-'}",
                f"Duración: {int(info.duracion_seg)} s" if info.duracion_seg else "Duración: -",
                f"Calidades: {', '.join(f'{a}p' for a in alturas) or 'no informadas'}",
+               texto_tamanos(info) or "Tamaño aproximado: el sitio no lo informa",
                f"Formatos disponibles: {len(info.formatos)}", f"Subtítulos: {', '.join(subs) or 'ninguno'}", "",
                f"Compatibilidad: {diag.nivel.value.replace('_', ' ')} ({diag.confianza.value})", diag.motivo]
         txt += [f"Alternativa: {a}" for a in diag.alternativas]
@@ -179,6 +181,8 @@ class SelectorElementos(QWidget):
         modo = o.get("modo")
         self.video = QCheckBox("Video"); self.audio = QCheckBox("Audio")
         self.subs = QCheckBox("Subtítulos"); self.portada = QCheckBox("Portada")
+        self.editable = QCheckBox("Para edición"); self.editable.setChecked(bool(o.get("editable")))
+        self.editable.setToolTip("MP4 con H.264 + AAC: lo abren Premiere, DaVinci, CapCut y cualquier editor")
         if modo:           # se reconstruye lo que ya se había elegido (p. ej. una tarea detectada desde la extensión)
             self.video.setChecked(modo == "video"); self.audio.setChecked(modo == "audio")
             self.subs.setChecked(bool(o.get("subtitulos")) or modo == "subtitulos")
@@ -196,7 +200,7 @@ class SelectorElementos(QWidget):
         self.formato_audio.setCurrentIndex(max(0, self.formato_audio.findData(o.get("formato_audio", p.formato_audio))))
 
         fila1 = QHBoxLayout(); fila1.setSpacing(16)
-        for c in (self.video, self.audio, self.subs, self.portada):
+        for c in (self.video, self.editable, self.audio, self.subs, self.portada):
             fila1.addWidget(c)
         fila1.addStretch()
         fila2 = QHBoxLayout(); fila2.setSpacing(8)
@@ -212,6 +216,7 @@ class SelectorElementos(QWidget):
     def _actualizar(self) -> None:
         """Solo se habilita lo que tiene sentido para lo marcado."""
         self.calidad.setEnabled(self.video.isChecked())
+        self.editable.setEnabled(self.video.isChecked())
         self.formato_audio.setEnabled(self.audio.isChecked())
         self.idiomas.setEnabled(self.subs.isChecked())
 
@@ -220,7 +225,8 @@ class SelectorElementos(QWidget):
         return opciones_desde_elementos(
             video=self.video.isChecked(), audio=self.audio.isChecked(), subtitulos=self.subs.isChecked(),
             idiomas=parsear_idiomas(self.idiomas.text()), portada=self.portada.isChecked(),
-            altura=self.calidad.currentData() or None, formato_audio=self.formato_audio.currentData() if self.audio.isChecked() else None)
+            altura=self.calidad.currentData() or None, formato_audio=self.formato_audio.currentData() if self.audio.isChecked() else None,
+            editable=self.video.isChecked() and self.editable.isChecked())
 
 
 class DialogoElementos(QDialog):

@@ -87,6 +87,38 @@ def normalizar_info(info: dict[str, Any], url: str) -> InfoContenido:
     )
 
 
+def tamanos_por_calidad(info: InfoContenido, maximo: int = 3) -> list[tuple[int, int]]:
+    """[(altura, bytes)] aproximados de la mejor calidad, 1080p y 720p (video + su audio).
+
+    Sirve para ver ANTES de descargar cuánto pesa cada opción: un 4K suele pesar 5 o 6 veces más que 1080p.
+    Se toma el formato más pesado de cada altura (cota alta): yt-dlp puede elegir uno algo más ligero.
+    """
+    audio = max((f.tamano_bytes or 0 for f in info.formatos if f.tipo == TipoFormato.SOLO_AUDIO), default=0)
+    por_altura: dict[int, int] = {}
+    for f in info.formatos:
+        if f.altura and f.tamano_bytes and f.tipo in (TipoFormato.SOLO_VIDEO, TipoFormato.VIDEO_Y_AUDIO):
+            total = f.tamano_bytes + (audio if f.tipo == TipoFormato.SOLO_VIDEO else 0)
+            por_altura[f.altura] = max(por_altura.get(f.altura, 0), total)
+    if not por_altura:
+        return []
+    alturas = sorted(por_altura, reverse=True)
+    elegidas = [alturas[0]] + [next((a for a in alturas if a <= tope), None) for tope in (1080, 720)]
+    salida: list[tuple[int, int]] = []
+    for a in elegidas:
+        if a is not None and a not in [x for x, _ in salida]:
+            salida.append((a, por_altura[a]))
+    return salida[:maximo]
+
+
+def texto_tamanos(info: InfoContenido) -> str | None:
+    """«Tamaño aproximado: 2160p ≈ 679 MB · 1080p ≈ 118 MB · 720p ≈ 62 MB» (None si el sitio no lo informa)."""
+    t = tamanos_por_calidad(info)
+    if not t:
+        return None
+    mb = lambda b: f"{b / 1073741824:.1f} GB" if b >= 1073741824 else f"{b / 1048576:.0f} MB"  # noqa: E731
+    return "Tamaño aproximado: " + " · ".join(f"{a}p ≈ {mb(b)}" for a, b in t)
+
+
 # Un "extractor de info" es cualquier función URL -> diccionario de yt-dlp.
 # Permite inyectar uno falso en las pruebas.
 FuncionExtraer = Callable[[str], dict[str, Any]]

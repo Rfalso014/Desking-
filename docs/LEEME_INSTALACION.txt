@@ -43,6 +43,7 @@ Notas
 - Desinstalar: con el instalador, desde Configuración de Windows > Aplicaciones (quita también la conexión
   y el inicio con Windows). En la portátil: GestorDescargas.exe --limpiar-sistema y borra la carpeta.
   Tus datos (historial, ajustes) quedan en %USERPROFILE%\.gestor-descargas; bórrala si no los quieres.
-- Actualizar yt-dlp: los sitios cambian a menudo. En la versión con Python: scripts\actualizar_ytdlp.py.
-  En la versión empaquetada: Configuración > Acerca de > "Buscar actualizaciones" y descarga el instalador nuevo
-  (se instala encima, sin perder tus datos).
+- Actualizar: en la aplicación (Configuración > Actualizaciones) o en la extensión (Ajustes > Actualizaciones)
+  pulsa "Actualizar aplicación y extensión". Pone al día la aplicación, la extensión y yt-dlp (los sitios cambian
+  a menudo); la aplicación se reinicia y la extensión se recarga sola. Con el instalador se descarga e instala
+  la versión nueva sin perder tus datos. Todo lo descargado se verifica con su huella SHA-256.

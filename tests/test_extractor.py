@@ -142,3 +142,16 @@ def test_lista_trae_sus_videos():
     r = normalizar_info(info, "u")
     assert r.es_lista and r.entradas == (("https://www.youtube.com/watch?v=a", "Uno"),
                                          ("https://www.youtube.com/watch?v=b", "Sin título"))
+
+
+def test_tamanos_por_calidad_muestra_cuanto_pesa_cada_opcion():
+    from gestor.extractor import tamanos_por_calidad, texto_tamanos
+    from gestor.modelos import FormatoInfo, InfoContenido, TipoFormato
+    MB = 1048576
+    f = lambda i, t, h, mb: FormatoInfo(id=i, extension="mp4", tipo=t, altura=h, tamano_bytes=mb * MB)  # noqa: E731
+    info = InfoContenido(url="https://a.test/v", titulo="v", sitio="x", formatos=(
+        f("a", TipoFormato.SOLO_AUDIO, None, 10), f("v4k", TipoFormato.SOLO_VIDEO, 2160, 669), f("v1080", TipoFormato.SOLO_VIDEO, 1080, 108),
+        f("v1080b", TipoFormato.SOLO_VIDEO, 1080, 90), f("v720", TipoFormato.SOLO_VIDEO, 720, 52), f("c360", TipoFormato.VIDEO_Y_AUDIO, 360, 20)))
+    assert tamanos_por_calidad(info) == [(2160, 679 * MB), (1080, 118 * MB), (720, 62 * MB)]
+    assert texto_tamanos(info) == "Tamaño aproximado: 2160p ≈ 679 MB · 1080p ≈ 118 MB · 720p ≈ 62 MB"
+    assert texto_tamanos(InfoContenido(url="https://a.test/v", titulo="v", sitio="x")) is None

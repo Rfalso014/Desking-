@@ -1,18 +1,20 @@
 """Ventana principal: barra lateral + páginas (Descargas, Historial, Reglas, Extensión, Configuración)."""
 import threading
+import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame,
                                QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QPlainTextEdit, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+                               QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
-from .. import __version__, actualizaciones, reglas
+from .. import __version__, reglas
+from ..actualizador import Actualizador
 from ..cola import GestorCola
 from ..config import NAVEGADORES_SESION, RAIZ_PROYECTO, localizar_deno, localizar_ffmpeg
-from ..modelos import ESTADOS_ACTIVOS, ErrorGestor, EstadoTarea, Tarea
+from ..modelos import ESTADOS_ACTIVOS, CodigoError, ErrorGestor, EstadoTarea, Tarea
 from ..nativo import autoinicio, instalador
 from ..organizador import ORGANIZACIONES, POLITICAS
 from ..validacion import validar_url
@@ -20,23 +22,25 @@ from ..vinculacion import Vinculacion
 from .dialogos import FORMATOS_AUDIO, AnalisisDialog, DialogoElementos, ReglaDialog, SelectorDestino, SelectorElementos, texto_error
 from .estilo import hoja_de_estilos, paleta
 from .formatos import formato_cuenta_atras, formato_velocidad
+from .iconos import icono, pixmap
 from .tarjeta import ETIQUETA, Miniaturas, TarjetaTarea
 
 FILTROS = [("todas", "Todas"), ("activas", "Activas"), ("completadas", "Completadas"), ("errores", "Con error")]
-PAGINAS = [("descargas", "⬇  Descargas"), ("historial", "◷  Historial"), ("reglas", "☰  Reglas"),
-           ("extension", "⛓  Extensión"), ("config", "⚙  Configuración")]
+PAGINAS = [("descargas", "Descargas", "cola"), ("historial", "Historial", "historial"), ("reglas", "Reglas", "reglas"),
+           ("extension", "Extensión", "extension"), ("config", "Ajustes", "ajustes")]
 MODOS_FORMULARIO = [("Video", "video"), ("Solo audio", "audio"), ("Solo subtítulos", "subtitulos"), ("Solo portada", "portada")]
 CALIDADES = [("Según mi configuración", ""), ("La mejor", "mejor"), ("1080p", "1080"), ("720p", "720"), ("480p", "480")]
 VELOCIDADES = [("Normal (conexión lenta o inestable)", "normal"), ("Rápida (recomendada)", "rapida"),
                ("Máxima (usa más conexiones a la vez)", "maxima")]
-TEMAS = [("Automático (como Windows)", "auto"), ("Claro", "claro"), ("Oscuro", "oscuro")]
+TEMAS = [("Automático (como Windows)", "auto"), ("Día", "claro"), ("Noche", "oscuro")]
+NOMBRE_TEMA = {"auto": "automático", "claro": "día", "oscuro": "noche"}
 
 
 class Puente(QObject):
     """Lleva avisos desde los hilos de trabajo al hilo de la interfaz (Qt lo exige)."""
     cambio = Signal(dict)
     analisis = Signal(object, object)   # (resultado | None, error | None)
-    version = Signal(object, object)    # (release | None, error | None)
+    actualizacion = Signal(dict)        # estado de «Actualizar aplicación y extensión»
 
 
 def _tabla(columnas: list[str]) -> QTableWidget:
@@ -94,16 +98,17 @@ def _caja() -> tuple[QFrame, QVBoxLayout]:
 
 
 class VentanaPrincipal(QMainWindow):
-    def __init__(self, cola: GestorCola, vinculacion: Vinculacion | None = None):
+    def __init__(self, cola: GestorCola, vinculacion: Vinculacion | None = None, actualizador: Actualizador | None = None):
         super().__init__()
         self.cola, self.db = cola, cola.db
         self.vinc = vinculacion or Vinculacion(cola.db)
+        self.actualizador = actualizador
         self.setWindowTitle("Gestor de Descargas")
         self.resize(1120, 720); self.setMinimumSize(940, 620)
         self.puente = Puente()
         self.puente.cambio.connect(self._programar_refresco)
         self.puente.analisis.connect(self._mostrar_analisis)
-        self.puente.version.connect(self._mostrar_version)
+        self.puente.actualizacion.connect(self._pintar_actualizacion)
         cola.suscribir(self.puente.cambio.emit)
         self.miniaturas = Miniaturas(self)
         self.miniaturas.lista.connect(lambda _u: self._programar_refresco({}))
@@ -113,10 +118,13 @@ class VentanaPrincipal(QMainWindow):
         self.ocultar_al_cerrar = False      # la aplicación lo activa cuando hay icono en la bandeja
         self.saliendo = False
 
+        # Diseño «riel lateral» (igual que la extensión): íconos a la izquierda y el contenido en un panel redondeado.
         central = QWidget(); self.setCentralWidget(central)
-        raiz = QHBoxLayout(central); raiz.setContentsMargins(0, 0, 0, 0); raiz.setSpacing(0)
+        raiz = QHBoxLayout(central); raiz.setContentsMargins(0, 10, 10, 10); raiz.setSpacing(0)
         raiz.addWidget(self._barra_lateral())
-        self.paginas = QStackedWidget(); raiz.addWidget(self.paginas, 1)
+        panel = QFrame(); panel.setObjectName("panel")
+        pl = QVBoxLayout(panel); pl.setContentsMargins(6, 6, 6, 6)
+        self.paginas = QStackedWidget(); pl.addWidget(self.paginas); raiz.addWidget(panel, 1)
         self._indice = {}
         for clave, constructor in (("descargas", self._pagina_descargas), ("historial", self._pagina_historial),
                                    ("reglas", self._pagina_reglas), ("extension", self._pagina_extension),
@@ -148,24 +156,44 @@ class VentanaPrincipal(QMainWindow):
             oscuro = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
         else:
             oscuro = tema == "oscuro"
-        self.setStyleSheet(hoja_de_estilos(paleta(oscuro)))
+        c = paleta(oscuro)
+        self.setStyleSheet(hoja_de_estilos(c))
+        for clave, _texto, nombre in PAGINAS:
+            self._nav[clave].setIcon(icono(nombre, c["riel_texto"], c["acento"]))
+        self.logo.setPixmap(pixmap("descarga", c["sobre_resalte"], 26))
+        self.b_tema.setIcon(icono(tema if tema in ("claro", "oscuro") else "auto", c["riel_texto"]))
+        self.b_tema.setToolTip(f"Tema: {NOMBRE_TEMA.get(tema, 'automático')} (pulsa para cambiar)")
+
+    def _cambiar_tema(self) -> None:
+        """Botón del riel: automático → día → noche (lo mismo que Ajustes > Tema)."""
+        p = self.db.cargar_preferencias()
+        orden = ["auto", "claro", "oscuro"]
+        p.tema = orden[(orden.index(p.tema) + 1) % 3] if p.tema in orden else "auto"
+        self.db.guardar_preferencias(p)
+        if hasattr(self, "c_tema"):
+            self.c_tema.setCurrentIndex(self.c_tema.findData(p.tema))
+        self.aplicar_tema()
 
     # --- barra lateral --------------------------------------------------------------------
     def _barra_lateral(self) -> QWidget:
-        f = QFrame(); f.setObjectName("lateral"); f.setFixedWidth(230)
-        lay = QVBoxLayout(f); lay.setContentsMargins(14, 20, 14, 14); lay.setSpacing(4)
-        marca = QLabel("⬇ Gestor de\nDescargas"); marca.setObjectName("marca")
-        sub = QLabel(f"Video, audio, subtítulos\ne imágenes · v{__version__}"); sub.setObjectName("submarca")
-        lay.addWidget(marca); lay.addWidget(sub); lay.addSpacing(18)
+        f = QFrame(); f.setObjectName("riel"); f.setFixedWidth(96)
+        lay = QVBoxLayout(f); lay.setContentsMargins(12, 6, 0, 2); lay.setSpacing(6)
+        self.logo = QLabel(); self.logo.setObjectName("logo"); self.logo.setFixedSize(48, 48); self.logo.setAlignment(Qt.AlignCenter)
+        fila_logo = QHBoxLayout(); fila_logo.setContentsMargins(0, 0, 12, 0); fila_logo.addWidget(self.logo)
+        lay.addLayout(fila_logo); lay.addSpacing(16)
         self._nav = {}
         grupo = QButtonGroup(self); grupo.setExclusive(True)
-        for clave, texto in PAGINAS:
-            b = QPushButton(texto); b.setProperty("nav", True); b.setCheckable(True); b.setCursor(Qt.PointingHandCursor)
+        for clave, texto, _icono in PAGINAS:
+            b = QToolButton(); b.setText(texto); b.setProperty("nav", True); b.setCheckable(True); b.setCursor(Qt.PointingHandCursor)
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon); b.setIconSize(QSize(24, 24)); b.setFixedSize(84, 64)
             b.clicked.connect(lambda _=False, c=clave: self.ir_a(c))
             grupo.addButton(b); lay.addWidget(b); self._nav[clave] = b
         lay.addStretch()
-        self.pie = QLabel(); self.pie.setObjectName("pie"); self.pie.setWordWrap(True)
-        lay.addWidget(self.pie)
+        self.b_tema = QToolButton(); self.b_tema.setObjectName("tema"); self.b_tema.setIconSize(QSize(22, 22))
+        self.b_tema.setCursor(Qt.PointingHandCursor); self.b_tema.clicked.connect(self._cambiar_tema)
+        fila_tema = QHBoxLayout(); fila_tema.setContentsMargins(0, 0, 12, 0); fila_tema.addWidget(self.b_tema)
+        lay.addLayout(fila_tema)
+        self.pie = QLabel()       # resumen del sistema: se ve al pasar el cursor por el logo
         return f
 
     def ir_a(self, clave: str) -> None:
@@ -177,9 +205,11 @@ class VentanaPrincipal(QMainWindow):
     # ========================= DESCARGAS ===========================================================
     def _pagina_descargas(self) -> QWidget:
         w, lay = _pagina()
-        cab = QHBoxLayout(); cab.addLayout(_titulo("Descargas", "Pega un enlace o envíalo desde la extensión del navegador."), 1)
-        self.resumen = QLabel(); self.resumen.setProperty("tenue", True)
-        cab.addWidget(self.resumen, 0, Qt.AlignBottom); lay.addLayout(cab)
+        cab = QHBoxLayout(); cab.setSpacing(8); cab.addLayout(_titulo("Descargas", "Pega un enlace o envíalo desde la extensión del navegador."), 1)
+        self.dato_descargando = self._dato(cab, "Descargando")
+        self.dato_espera = self._dato(cab, "En espera")
+        self.dato_velocidad = self._dato(cab, "Velocidad", resaltado=True, ancho=150)
+        lay.addLayout(cab)
 
         caja, c = _caja()
         fila = QHBoxLayout(); fila.setSpacing(8)
@@ -228,13 +258,35 @@ class VentanaPrincipal(QMainWindow):
         lay.addWidget(area, 1)
         return w
 
+    @staticmethod
+    def _dato(fila: QHBoxLayout, texto: str, *, resaltado: bool = False, ancho: int = 112) -> QLabel:
+        """Cuadro del resumen (número grande + texto); el de la velocidad va resaltado, como en la extensión."""
+        f = QFrame(); f.setObjectName("dato"); f.setProperty("resaltado", resaltado); f.setFixedWidth(ancho)
+        l = QVBoxLayout(f); l.setContentsMargins(12, 8, 12, 8); l.setSpacing(0)
+        num = QLabel("0" if not resaltado else "—"); num.setObjectName("datoNum")
+        txt = QLabel(texto); txt.setObjectName("datoTxt")
+        l.addWidget(num); l.addWidget(txt); fila.addWidget(f, 0, Qt.AlignBottom)
+        return num
+
     def _pegar(self) -> None:
         self.url.setText(QGuiApplication.clipboard().text().strip())
 
     def _anadir(self) -> None:
         try:
-            for opciones in self.destino.aplicar(self.selector.opciones()):        # video + audio marcados = dos descargas
-                self.cola.encolar(self.url.text(), opciones=opciones)
+            conjuntos = self.destino.aplicar(self.selector.opciones())             # video + audio marcados = dos descargas
+            repetir = False
+            for opciones in conjuntos:
+                try:
+                    self.cola.exigir_no_repetida(self.url.text(), opciones)
+                except ErrorGestor as e:
+                    if e.codigo != CodigoError.DUPLICADO:
+                        raise
+                    if QMessageBox.question(self, "Ya está en tu lista", f"{e.mensaje}\n{e.causa}\n\n¿Quieres descargarlo otra vez?") != QMessageBox.Yes:
+                        return
+                    repetir = True
+                    break
+            for opciones in conjuntos:
+                self.cola.encolar(self.url.text(), opciones=opciones, permitir_repetida=repetir)
             self.url.clear()
             self.statusBar().showMessage("Añadida a la cola", 3000)
         except ErrorGestor as e:
@@ -351,8 +403,9 @@ class VentanaPrincipal(QMainWindow):
         activas = [t for t in todas if t.estado == EstadoTarea.DESCARGANDO]
         pendientes = sum(1 for t in todas if t.estado in (EstadoTarea.PENDIENTE, EstadoTarea.ANALIZANDO, EstadoTarea.PROCESANDO))
         vel = formato_velocidad(sum(t.velocidad_bps or 0 for t in activas))
-        self.resumen.setText("  ·  ".join(x for x in (f"{len(activas)} descargando" if activas else "Nada descargando",
-                                                      f"{pendientes} en espera" if pendientes else "", vel) if x))
+        self.dato_descargando.setText(str(len(activas)))
+        self.dato_espera.setText(str(pendientes + sum(1 for t in todas if t.estado == EstadoTarea.DETECTADO)))
+        self.dato_velocidad.setText(vel or "—")
         self.statusBar().showMessage(f"{len(todas)} descarga(s) en la lista")
         if hasattr(self, "tabla_hist"):
             self._refrescar_historial()
@@ -603,12 +656,22 @@ class VentanaPrincipal(QMainWindow):
         bh.addStretch(); f4.addRow("Navegador", bh)
         cl.addWidget(g4)
 
-        g5 = QGroupBox("Acerca de"); f5 = QFormLayout(g5)
-        self.estado_version = QLabel(f"Versión {__version__}"); self.estado_version.setWordWrap(True)
-        self.b_version = _boton("Buscar actualizaciones", tip="Consulta GitHub; no descarga nada por su cuenta")
-        self.b_version.clicked.connect(self._buscar_actualizaciones)
-        fv = QHBoxLayout(); fv.addWidget(self.estado_version, 1); fv.addWidget(self.b_version); f5.addRow("Programa", fv)
+        g5 = QGroupBox("Actualizaciones"); f5 = QFormLayout(g5)
+        self.act_versiones = QLabel(); self.act_versiones.setWordWrap(True)
+        self.act_estado = QLabel(); self.act_estado.setWordWrap(True)
+        f5.addRow("Versiones", self.act_versiones); f5.addRow("Estado", self.act_estado)
+        self.b_buscar_act = _boton("Buscar", tip="Solo consulta qué hay nuevo; no instala nada")
+        self.b_actualizar = _boton("Actualizar aplicación y extensión", primario=True,
+                                   tip="Actualiza la aplicación, la extensión y las librerías (yt-dlp…) y reinicia la aplicación")
+        self.b_buscar_act.clicked.connect(lambda: self.actualizador and self.actualizador.buscar_en_segundo_plano())
+        self.b_actualizar.clicked.connect(self._actualizar_todo)
+        fa = QHBoxLayout(); fa.addStretch(); fa.addWidget(self.b_buscar_act); fa.addWidget(self.b_actualizar); f5.addRow("", fa)
         cl.addWidget(g5); cl.addStretch()
+        if self.actualizador:
+            self.actualizador.suscribir(self.puente.actualizacion.emit)
+            QTimer.singleShot(0, lambda: self._pintar_actualizacion(self.actualizador.estado()))
+        else:
+            self.act_versiones.setText(f"Aplicación {__version__}"); self.b_buscar_act.setEnabled(False); self.b_actualizar.setEnabled(False)
         area = QScrollArea(); area.setWidgetResizable(True); area.setFrameShape(QFrame.NoFrame); area.setWidget(contenido)
         lay.addWidget(area, 1)
         guardar = _boton("Guardar configuración", primario=True); guardar.clicked.connect(self._guardar_config)
@@ -663,6 +726,7 @@ class VentanaPrincipal(QMainWindow):
         self.pie.setText(f"{'●' if ff else '○'} FFmpeg\n{'●' if deno else '○'} Deno (YouTube)\n"
                          f"{'●' if conexion else '○'} Conexión con el navegador\n{'●' if n else '○'} Extensión vinculada" +
                          (f" ({n})" if n else ""))
+        self.logo.setToolTip(f"Gestor de Descargas · v{__version__}\n\n{self.pie.text()}")
 
     def _instalar_host(self) -> None:
         try:
@@ -676,25 +740,27 @@ class VentanaPrincipal(QMainWindow):
     def _quitar_host(self) -> None:
         instalador.desinstalar(); self._actualizar_estado_sistema()
 
-    def _buscar_actualizaciones(self) -> None:
-        self.b_version.setEnabled(False); self.estado_version.setText(f"Versión {__version__} · buscando…")
+    def _actualizar_todo(self) -> None:
+        try:
+            self.actualizador.iniciar()
+        except ErrorGestor as e:
+            QMessageBox.information(self, "No se puede actualizar ahora", texto_error(e))
 
-        def trabajo():
-            try:
-                self.puente.version.emit(actualizaciones.buscar(), None)
-            except Exception as e:        # sin conexión, límite de la API, respuesta rara…
-                self.puente.version.emit(None, e)
-        threading.Thread(target=trabajo, daemon=True).start()
-
-    def _mostrar_version(self, release, error) -> None:
-        self.b_version.setEnabled(True)
-        if error is not None:
-            self.estado_version.setText(f"Versión {__version__} · no se pudo comprobar (¿sin conexión?)")
-        elif not release["nueva"]:
-            self.estado_version.setText(f"Versión {__version__} · es la más reciente")
-        else:
-            self.estado_version.setText(f"Versión {__version__} · hay una nueva: {release['version']}")
-            if QMessageBox.question(self, "Hay una versión nueva",
-                                    f"Está disponible la versión {release['version']} (tienes la {__version__}).\n\n"
-                                    "¿Abrir la página de descarga?") == QMessageBox.Yes:
-                QDesktopServices.openUrl(QUrl(release["url"]))
+    def _pintar_actualizacion(self, e: dict) -> None:
+        v = e.get("versiones", {})
+        nombres = [("app", "Aplicación"), ("yt-dlp", "yt-dlp"), ("yt-dlp-ejs", "Solucionador JS"), ("gallery-dl", "gallery-dl"),
+                   ("deno", "Deno"), ("ffmpeg", "FFmpeg")]
+        lineas = [f"{t}: {v[k]}" for k, t in nombres if v.get(k)]
+        if e.get("version_extension"):
+            lineas.insert(1, f"Extensión: {e['version_extension']}")
+        self.act_versiones.setText("\n".join(lineas))
+        texto = [e.get("mensaje") or ""]
+        texto += [f"• {p['nombre']}: {p['actual']} → {p['nueva']}" for p in e.get("pendientes", [])]
+        texto += [f"✓ {h}" for h in e.get("hechos", []) if e.get("fase") == "listo"]
+        texto += [f"⚠ {a}" for a in e.get("avisos", [])]
+        if e.get("ultima_busqueda") and e.get("fase") == "inactivo":
+            texto.append(f"Última búsqueda: {time.strftime('%d/%m/%Y %H:%M', time.localtime(e['ultima_busqueda']))}")
+        self.act_estado.setText("\n".join(t for t in texto if t) or "Pulsa «Buscar» para ver si hay algo nuevo.")
+        ocupado = e.get("fase") in ("buscando", "actualizando")
+        self.b_buscar_act.setEnabled(not ocupado); self.b_actualizar.setEnabled(not ocupado)
+        self.b_actualizar.setText("Actualizando…" if e.get("fase") == "actualizando" else "Actualizar aplicación y extensión")

@@ -1,7 +1,7 @@
 """Comprobar si hay una versión nueva publicada en GitHub (Releases).
 
-Solo consulta; nunca descarga ni instala nada por su cuenta: si hay una versión nueva, la
-interfaz ofrece abrir la página del release para que la persona descargue el instalador.
+Solo consulta. La descarga e instalación las hace `actualizador.py`, y solo cuando la persona pulsa
+«Actualizar aplicación y extensión».
 """
 import json
 import re
@@ -31,7 +31,17 @@ def interpretar_release(datos: dict, actual: str = __version__) -> dict:
     return {"version": etiqueta.lstrip("vV"),
             "nueva": bool(etiqueta) and comparar_versiones(etiqueta, actual) > 0,
             "url": datos.get("html_url") or URL_RELEASES,
-            "notas": str(datos.get("body") or "")[:2000]}
+            "notas": str(datos.get("body") or "")[:2000],
+            "instalador": _instalador(datos.get("assets") or [])}
+
+
+def _instalador(assets: list) -> dict | None:
+    """El .exe del instalador y su SHA-256 (GitHub lo publica en «digest»). Sin huella no se usa."""
+    for a in assets:
+        nombre, digest = str(a.get("name", "")), str(a.get("digest") or "")
+        if re.fullmatch(r"GestorDescargas-[\w.]+-instalador\.exe", nombre) and digest.startswith("sha256:"):
+            return {"nombre": nombre, "url": a.get("browser_download_url"), "sha256": digest[7:], "tamano": a.get("size")}
+    return None
 
 
 def buscar(timeout: float = 8.0) -> dict:

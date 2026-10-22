@@ -64,6 +64,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 ; Registra la conexión con Chrome y Edge (Native Messaging) apuntando a esta instalación.
 Filename: "{app}\{#Exe}"; Parameters: "--instalar-host"; StatusMsg: "Registrando la conexión con el navegador..."; Flags: runhidden waituntilterminated
 Filename: "{app}\{#Exe}"; Description: "Abrir {#Nombre}"; Flags: postinstall nowait skipifsilent
+; Actualización desde la app («Actualizar aplicación y extensión», instalación silenciosa): se vuelve a abrir sola.
+Filename: "{app}\{#Exe}"; Parameters: "--segundo-plano --reiniciado"; Flags: nowait; Check: WizardSilent
 Filename: "{app}\LEEME_INSTALACION.txt"; Description: "Ver cómo conectar la extensión del navegador"; Flags: postinstall shellexec skipifsilent unchecked
 
 [UninstallRun]

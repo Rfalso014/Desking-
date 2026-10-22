@@ -31,8 +31,8 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "ping": (set(), set()),
     "mostrar": (set(), set()),
     "analizar": ({"url"}, set()),
-    "detectar": ({"url"}, {"origen", "opciones"}),
-    "encolar": ({"url"}, {"origen", "opciones"}),
+    "detectar": ({"url"}, {"origen", "opciones", "forzar"}),   # forzar = añadirlo aunque ya esté en la lista
+    "encolar": ({"url"}, {"origen", "opciones", "forzar"}),
     "iniciar": ({"id"}, {"opciones"}),
     "listar": (set(), {"estados", "texto", "limite"}),
     "estado": ({"id"}, set()),
@@ -44,6 +44,9 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "desvincular": (set(), set()),
     "abrir_carpeta": ({"id"}, set()),
     "limpiar": (set(), set()),
+    "actualizacion": (set(), {"buscar"}),   # estado de «Actualizar aplicación y extensión» (y buscar, opcional)
+    "actualizar": (set(), set()),           # empieza a actualizar todo
+    "reiniciar": (set(), set()),            # cierra y vuelve a abrir la app (p. ej. si quedó una versión anterior abierta)
 }
 
 
@@ -119,6 +122,14 @@ def validar_mensaje(msg: Any) -> dict:
         if not isinstance(datos["texto"], str) or len(datos["texto"]) > 200:
             raise _malo("Texto de búsqueda no válido.")
         limpio["texto"] = datos["texto"]
+    if "forzar" in datos:
+        if not isinstance(datos["forzar"], bool):
+            raise _malo("'forzar' debe ser verdadero o falso.")
+        limpio["forzar"] = datos["forzar"]
+    if "buscar" in datos:
+        if not isinstance(datos["buscar"], bool):
+            raise _malo("'buscar' debe ser verdadero o falso.")
+        limpio["buscar"] = datos["buscar"]
     if "limite" in datos:
         l = datos["limite"]
         if not isinstance(l, int) or isinstance(l, bool) or not 1 <= l <= 200:

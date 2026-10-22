@@ -13,7 +13,8 @@ def test_comparar_versiones():
 
 def test_release_mas_nuevo_se_ofrece():
     r = interpretar_release({"tag_name": "v99.0.0", "html_url": "https://github.com/x/y/releases/tag/v99.0.0", "body": "notas"})
-    assert r == {"version": "99.0.0", "nueva": True, "url": "https://github.com/x/y/releases/tag/v99.0.0", "notas": "notas"}
+    assert r == {"version": "99.0.0", "nueva": True, "url": "https://github.com/x/y/releases/tag/v99.0.0", "notas": "notas",
+                 "instalador": None}
 
 
 def test_misma_version_o_respuesta_vacia_no_es_nueva():

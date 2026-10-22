@@ -221,6 +221,24 @@ def _info(**kw):
     return InfoContenido(url="https://a.test/x", titulo="Mi lista", sitio="Youtube", **kw)
 
 
+def test_feed_sin_videos_se_marca_como_error_al_detectarlo(tmp_path):
+    # youtube.com/ llega como la «lista» recommended sin videos: se avisa ya, con qué hacer.
+    db = BaseDatos(":memory:")
+    db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
+    cola = GestorCola(db, extraer=lambda u, **k: _info(es_lista=True, entradas=()), permitir_interno=True)
+    try:
+        t = cola.detectar("https://a.test/")
+        for _ in range(100):
+            t = cola.obtener(t.id)
+            if t.error:
+                break
+            time.sleep(0.02)
+        assert t.estado == EstadoTarea.DETECTADO
+        assert "no hay ningún video" in t.error["mensaje"] and "miniatura" in t.error["solucion"]
+    finally:
+        db.cerrar()
+
+
 def test_lista_se_expande_en_un_video_por_tarea(tmp_path):
     db = BaseDatos(":memory:")
     db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
@@ -263,3 +281,37 @@ def test_cancelar_todas(entorno):
     assert cola.cancelar_todas() == 2
     assert cola.obtener(a.id).estado == cola.obtener(b.id).estado == EstadoTarea.CANCELADO
     assert cola.obtener(c.id).estado == EstadoTarea.COMPLETADO
+
+
+def test_video_repetido_se_detecta_aunque_cambie_el_enlace(tmp_path):
+    db = BaseDatos(":memory:")
+    db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
+    cola = GestorCola(db, extraer=lambda u, **k: _info(), permitir_interno=True)
+    try:
+        cola.detectar("https://www.youtube.com/watch?v=dQw4w9WgXcQ", opciones={"modo": "video"})
+        for igual in ("https://youtu.be/dQw4w9WgXcQ", "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=30", "https://www.youtube.com/shorts/dQw4w9WgXcQ"):
+            assert cola.buscar_repetida(igual, {"modo": "video"}) is not None, igual
+        assert cola.buscar_repetida("https://youtu.be/dQw4w9WgXcQ", {"modo": "audio"}) is None      # el audio aparte no es repetido
+        assert cola.buscar_repetida("https://youtu.be/otroOTRO123", {"modo": "video"}) is None
+        with pytest.raises(ErrorGestor) as e:
+            cola.exigir_no_repetida("https://youtu.be/dQw4w9WgXcQ")
+        assert e.value.codigo == CodigoError.DUPLICADO and "detectado" in e.value.causa
+        t = cola.buscar_repetida("https://youtu.be/dQw4w9WgXcQ")
+        cola.cancelar(t.id)
+        assert cola.buscar_repetida("https://youtu.be/dQw4w9WgXcQ") is None                      # cancelado: se puede volver a añadir
+    finally:
+        db.cerrar()
+
+
+def test_otro_trozo_del_mismo_video_no_es_repetido(tmp_path):
+    db = BaseDatos(":memory:")
+    db.guardar_preferencias(Preferencias(carpeta_raiz=tmp_path))
+    cola = GestorCola(db, extraer=lambda u, **k: _info(), permitir_interno=True)
+    try:
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        cola.detectar(url, opciones={"modo": "video", "tramos": [[80, 225]]})
+        assert cola.buscar_repetida(url, {"modo": "video", "tramos": [[80.0, 225.0]]}) is not None    # el mismo trozo
+        assert cola.buscar_repetida(url, {"modo": "video", "tramos": [[300, 330]]}) is None             # otro trozo
+        assert cola.buscar_repetida(url, {"modo": "video"}) is None                                     # el video entero
+    finally:
+        db.cerrar()

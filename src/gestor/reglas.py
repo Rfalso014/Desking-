@@ -78,7 +78,8 @@ class Resolucion:
         fragmentos, trozo = PERFILES_VELOCIDAD.get(prefs.velocidad, PERFILES_VELOCIDAD["rapida"])
         return OpcionesDescarga(
             modo=c["modo"], altura_max=c["altura_max"], contenedor_video=c["contenedor_video"],
-            formato_audio=c["formato_audio"], subtitulos=tuple(c["subtitulos"]), portada=c["portada"],
+            formato_audio=c["formato_audio"], subtitulos=tuple(c["subtitulos"]), portada=c["portada"], editable=c["editable"],
+            tramos=tuple((float(a), float(b)) for a, b in c["tramos"]), corte_exacto=c["corte_exacto"],
             plantilla_nombre=prefs.plantilla_nombre, ffmpeg_dir=ffmpeg_dir,
             fragmentos=fragmentos, trozo_http=trozo, deno=deno, sesion=opciones_sesion(prefs))
 
@@ -92,7 +93,8 @@ def resolver(url: str, sitio: str | None, reglas: list[dict], prefs: Preferencia
         "modo": "video", "altura_max": prefs.altura_max, "contenedor_video": prefs.contenedor_video,
         "formato_audio": prefs.formato_audio,
         "subtitulos": list(prefs.idiomas_subtitulos) if prefs.descargar_subtitulos else [],
-        "portada": prefs.descargar_portada, "subcarpeta": None, "destino": None, "excluir": False,
+        "portada": prefs.descargar_portada, "editable": False, "tramos": [], "corte_exacto": False,
+        "subcarpeta": None, "destino": None, "excluir": False,
     }
     origen = {k: "preferencias globales" for k in campos}
     aplicadas: list[str] = []

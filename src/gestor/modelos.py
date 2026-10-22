@@ -115,6 +115,7 @@ class CodigoError(str, Enum):
     NO_VINCULADO = "no_vinculado"
     CONFIGURACION = "configuracion"
     CANCELADO = "cancelado"
+    DUPLICADO = "duplicado"          # ese video ya está en la lista: se pregunta antes de añadirlo otra vez
     DESCONOCIDO = "desconocido"
 
 
