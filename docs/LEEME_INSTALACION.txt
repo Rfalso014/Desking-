@@ -1,5 +1,5 @@
-GESTOR DE DESCARGAS - Instalación (Windows)
-===========================================
+GESTOR DE DESCARGAS 1.1 - Instalación (Windows)
+===============================================
 
 La aplicación (GestorDescargas.exe) es la que descarga. La extensión del navegador solo detecta videos y le manda
 órdenes a la aplicación («Descargar», «Cancelar», «Eliminar»).
@@ -20,12 +20,14 @@ La aplicación (GestorDescargas.exe) es la que descarga. La extensión del naveg
    El ID de la extensión es fijo y es el único autorizado por la conexión.
 
 4. Paso 3 (vincular): la pestaña "Extensión" de la aplicación muestra un CÓDIGO de 8 caracteres (ej. K7M2-9QXA).
-   Abre la extensión (icono en la barra del navegador) y escríbelo. El código dura 10 minutos y sirve una sola vez.
+   Pulsa el icono de la extensión en la barra del navegador: se abre una BARRA LATERAL a la derecha. Escribe ahí
+   el código. Dura 10 minutos y sirve una sola vez. (Consejo: fija el icono con la pieza de puzle > chincheta.)
    Sin este paso la aplicación ignora a la extensión. Puedes revocar la vinculación desde la aplicación.
 
-5. Prueba: pasa el cursor sobre un video y pulsa "+ Añadir", o clic derecho sobre un enlace >
-   "Añadir a Gestor de Descargas". Eso SOLO lo agrega a tu lista (estado "Detectado"): no se descarga nada
-   hasta que tú pulses "Descargar" en la pestaña Cola de la extensión o en la aplicación.
+5. Prueba: pasa el cursor sobre un video (o sobre su miniatura) y pulsa "+ Añadir", o clic derecho sobre un
+   enlace > "Añadir a Gestor de Descargas". Eso SOLO lo agrega a tu lista (estado "Detectado"): no se descarga
+   nada hasta que tú pulses "Descargar" en la Cola de la extensión o en la aplicación.
+   Si la extensión dice que "la aplicación abierta es una versión anterior", pulsa "Reiniciar aplicación".
 
 Qué descargar
 - En la aplicación (pestaña Descargas) y en la extensión puedes combinar casillas: Video, Audio, Subtítulos
@@ -34,11 +36,30 @@ Qué descargar
 - Solo subtítulos o solo portada también se puede: marca únicamente esa casilla.
 - Los enlaces que agregas con "+ Añadir" quedan "Detectados": al pulsar "Descargar" eliges qué quieres de ellos.
 - En la extensión, pestaña Ajustes > "Qué descargar por defecto" fija lo que usan el botón sobre los videos y el clic derecho.
+- Antes de descargar verás el tamaño aproximado de cada calidad (por ejemplo 2160p ≈ 679 MB · 1080p ≈ 118 MB).
+- Si un video ya está en tu lista, te pregunta si quieres descargarlo otra vez (botón: pulsa de nuevo;
+  clic derecho: una notificación con "Añadir otra vez"). Lo cancelado o fallido no cuenta.
+
+Descargar solo unos minutos (Recortar)
+- En YouTube: pasa el cursor sobre el video y pulsa las tijeras (✂). Aparece una franja sobre el video con dos asas:
+  arrástralas para marcar el inicio y el fin (el video muestra ese momento), o usa "Marcar ahora" / escribe 1:20.
+  Pulsa "▶ Ver trozo" para comprobarlo y "Descargar trozo" para bajarlo.
+- Varios trozos del mismo video: barra lateral > página "Recortar" (icono de tijeras), hasta 10.
+- "Corte exacto": empieza en el segundo justo, pero convierte el trozo y tarda más. Sin él es casi instantáneo,
+  aunque puede empezar unos segundos antes.
+- Si el trozo es una parte grande del video, la aplicación baja el video entero y lo corta (es más rápido).
+- No funciona en directos que siguen emitiéndose ni con contenido protegido. En pantalla completa la franja no se ve.
+
+Para edición (Premiere, DaVinci, CapCut, Final Cut, Vegas…)
+- Marca "Para edición" (o actívalo siempre en la página "Edición" de la extensión): el video se guarda en MP4 con
+  H.264 + AAC. En 1080p casi nunca hay que convertir; en 1440p/4K se convierte con la tarjeta gráfica si se puede.
 
 Notas
 - FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).
 - Deno viene en tools\deno: yt-dlp lo usa para YouTube y otros sitios que lo requieren.
-- Velocidad: Configuración > Velocidad (Normal / Rápida / Máxima). Descarga varios fragmentos a la vez.
+- Velocidad: Configuración > Velocidad (Normal / Rápida / Máxima) y "Descargas a la vez". La calidad es lo que más
+  pesa: un 4K ocupa unas 5 veces más que 1080p.
+- Tema: botón de abajo de la barra de iconos (app y extensión): automático > día > noche.
 - Las galerías de imágenes (gallery-dl) solo funcionan en la versión de desarrollo con Python.
 - Desinstalar: con el instalador, desde Configuración de Windows > Aplicaciones (quita también la conexión
   y el inicio con Windows). En la portátil: GestorDescargas.exe --limpiar-sistema y borra la carpeta.
