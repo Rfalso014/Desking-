@@ -3,7 +3,7 @@
 > ## ⬇️ [Descargar el instalador para Windows](https://github.com/Rfalso014/Desking-/releases/latest)
 > Abre el enlace, baja **`GestorDescargas-…-instalador.exe`** (en *Assets*) y ábrelo con doble clic. No necesitas Python ni nada más.
 > Si Windows muestra «Windows protegió su PC»: **Más información → Ejecutar de todas formas**.
-> El repositorio es privado: para ver la descarga hay que tener acceso a él en GitHub; si no, pide el `.exe` a quien te lo recomendó.
+> Una vez instalado se **actualiza solo** (busca versiones nuevas cada 6 horas; se puede desactivar en Ajustes).
 >
 > *No descargues el código («Code → Download ZIP»): eso es para programadores y necesita Python.*
 
@@ -47,7 +47,7 @@ Extensión (MV3) ──stdio──► Host nativo ──pipe con clave──► 
 3. Conecta la extensión (abajo). La carpeta `extension` está en el menú Inicio → *Gestor de Descargas* → «Carpeta de la extensión del navegador».
 
 También hay una versión **portátil** (`…-portable.zip`): descomprímela y ejecuta `GestorDescargas.exe --instalar-host` una vez.
-Para actualizar: pulsa **«Actualizar aplicación y extensión»** en *Configuración → Actualizaciones* (app) o en *Ajustes → Actualizaciones* (extensión). Con el instalador descarga e instala la versión nueva sin perder tus datos; la app se reinicia y la extensión se recarga sola (si la cargaste desde la carpeta de la instalación).
+Se actualiza sola: cada 6 horas busca versiones nuevas y, si hay, las instala cuando no hay descargas en curso (casilla «Actualizar automáticamente», activada por defecto). También puedes pulsar **«Actualizar aplicación y extensión»** en *Configuración → Actualizaciones* (app) o en *Ajustes → Actualizaciones* (extensión). Con el instalador descarga e instala la versión nueva sin perder tus datos; la app se reinicia y la extensión se recarga sola (si la cargaste desde la carpeta de la instalación).
 Desinstalar: *Configuración de Windows → Aplicaciones*; quita también la conexión con el navegador y el inicio con Windows.
 
 ## Instalar y ejecutar (Windows, desarrollo)
