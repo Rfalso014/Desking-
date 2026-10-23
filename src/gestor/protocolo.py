@@ -44,7 +44,7 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "desvincular": (set(), set()),
     "abrir_carpeta": ({"id"}, set()),
     "limpiar": (set(), set()),
-    "actualizacion": (set(), {"buscar"}),   # estado de «Actualizar aplicación y extensión» (y buscar, opcional)
+    "actualizacion": (set(), {"buscar", "automatico"}),   # estado de «Actualizar…»; buscar y activar «automático» (opcional)
     "actualizar": (set(), set()),           # empieza a actualizar todo
     "reiniciar": (set(), set()),            # cierra y vuelve a abrir la app (p. ej. si quedó una versión anterior abierta)
 }
@@ -126,10 +126,11 @@ def validar_mensaje(msg: Any) -> dict:
         if not isinstance(datos["forzar"], bool):
             raise _malo("'forzar' debe ser verdadero o falso.")
         limpio["forzar"] = datos["forzar"]
-    if "buscar" in datos:
-        if not isinstance(datos["buscar"], bool):
-            raise _malo("'buscar' debe ser verdadero o falso.")
-        limpio["buscar"] = datos["buscar"]
+    for clave in ("buscar", "automatico"):
+        if clave in datos:
+            if not isinstance(datos[clave], bool):
+                raise _malo(f"'{clave}' debe ser verdadero o falso.")
+            limpio[clave] = datos[clave]
     if "limite" in datos:
         l = datos["limite"]
         if not isinstance(l, int) or isinstance(l, bool) or not 1 <= l <= 200:

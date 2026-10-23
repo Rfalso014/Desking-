@@ -736,7 +736,13 @@ function pintarActualizacion(e) {
   $("btn-actualizar").disabled = $("btn-buscar-act").disabled = ocupado;
   $("btn-actualizar").textContent = e.fase === "actualizando" ? "Actualizando…" : "Actualizar aplicación y extensión";
   marcarAvisoActualizacion((e.pendientes || []).length);
+  if (typeof e.automatico === "boolean") $("act-auto").checked = e.automatico;
 }
+
+$("act-auto").addEventListener("change", async (e) => {
+  const r = await nativo("actualizacion", { automatico: e.target.checked });
+  if (r.ok) pintarActualizacion(r.datos); else mostrarAviso(textoError(r.error));
+});
 
 $("btn-buscar-act").addEventListener("click", () => refrescarActualizacion(true));
 $("btn-actualizar").addEventListener("click", async () => {

@@ -288,3 +288,52 @@ def test_ipc_pregunta_antes_de_repetir_un_video():
             validar_mensaje({"v": 1, "id": "d", "accion": "encolar", "datos": {"url": url, "forzar": "si"}})
     finally:
         db.cerrar()
+
+
+# --- actualización automática ---------------------------------------------------------------------------
+def test_se_actualiza_sola_si_esta_activado(con_ytdlp):
+    reinicios = []
+    a = _act("desarrollo", Git(atrasados=2), pypi="2026.9.9", automatico=lambda: True)
+    a.al_reiniciar = lambda: reinicios.append(1)
+    assert a.revisar_automatico() == "actualizando"
+    e = _esperar(a)
+    assert e["fase"] == "listo" and reinicios == [1] and a.marca()["automatica"] is True
+    assert a.aviso_tras_reinicio() and a.aviso_tras_reinicio() is None          # se avisa una sola vez
+
+
+def test_sin_permiso_solo_avisa(con_ytdlp):
+    a = _act("desarrollo", Git(atrasados=2), automatico=lambda: False)
+    assert a.revisar_automatico() == "nada" and a.estado()["pendientes"]          # lo nuevo queda a la vista en Ajustes
+
+
+def test_espera_a_que_terminen_las_descargas(con_ytdlp):
+    a = _act("desarrollo", Git(atrasados=2), automatico=lambda: True, hay_descargas=lambda: True)
+    assert a.revisar_automatico() == "esperando" and a.estado()["fase"] == "inactivo"
+
+
+def test_la_portatil_no_se_reinstala_sola(con_ytdlp):
+    release = {"tag_name": "v99.0.0", "html_url": "https://github.com/x"}
+    a = _act("portatil", release=release, automatico=lambda: True)
+    assert a.revisar_automatico() == "nada"
+
+
+def test_no_busca_en_cada_revision(con_ytdlp):
+    git = Git()
+    a = _act("desarrollo", git, automatico=lambda: True)
+    a.revisar_automatico(); a.revisar_automatico()
+    assert sum("fetch" in c for c in git.comandos) == 1                           # cada 6 horas, no cada hora
+
+
+def test_la_extension_activa_y_desactiva_la_actualizacion_automatica():
+    from gestor.cola import GestorCola
+    from gestor.db import BaseDatos
+    from gestor.ipc import Manejador
+    db = BaseDatos(":memory:")
+    try:
+        man = Manejador(GestorCola(db))
+        man.actualizador = _act("desarrollo", automatico=lambda: db.cargar_preferencias().actualizar_solo)
+        token = man.vinculacion.emparejar(man.vinculacion.codigo_actual()[0], "Prueba")
+        r = man.manejar({"v": 1, "id": "a", "accion": "actualizacion", "datos": {"automatico": False}, "token": token})
+        assert r["ok"] and r["datos"]["automatico"] is False and db.cargar_preferencias().actualizar_solo is False
+    finally:
+        db.cerrar()

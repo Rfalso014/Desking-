@@ -24,7 +24,8 @@ from .modelos import CodigoError, ErrorGestor
 from .nativo.comun import carpeta_datos
 
 HOSTS_GITHUB = frozenset({"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"})
-BUSQUEDA_AUTOMATICA_SEG = 24 * 3600
+BUSQUEDA_AUTOMATICA_SEG = 6 * 3600     # cada cuánto se consulta si hay versiones nuevas
+REVISION_SEG = 3600                     # cada cuánto se revisa (y se reintenta si había descargas en curso)
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -56,8 +57,11 @@ class Actualizador:
     """Guarda el estado (lo consultan la ventana y la extensión) y hace el trabajo en un hilo aparte."""
 
     def __init__(self, *, modo: str | None = None, leer_json=componentes.leer_json, ejecutar=subprocess.run,
-                 descargar=componentes.descargar_verificado, hay_descargas: Callable[[], bool] = lambda: False):
+                 descargar=componentes.descargar_verificado, hay_descargas: Callable[[], bool] = lambda: False,
+                 automatico: Callable[[], bool] = lambda: False):
         self.modo = modo or modo_instalacion()
+        self._automatico = automatico           # «Actualizar automáticamente» (preferencia de la persona)
+        self._es_automatica = False
         self._leer, self._ejecutar, self._descargar, self._hay_descargas = leer_json, ejecutar, descargar, hay_descargas
         self.al_reiniciar: Callable[[], None] | None = None      # la app lo fija: se cierra y vuelve a abrir
         self.al_instalar: Callable[[Path], None] | None = None   # la app lo fija: lanza el instalador y se cierra
@@ -87,7 +91,7 @@ class Actualizador:
     def estado(self) -> dict:
         with self._lock:
             e = dict(self._estado)
-        return {**e, "modo": self.modo, "versiones": self.versiones(), "marca": self.marca(),
+        return {**e, "modo": self.modo, "versiones": self.versiones(), "marca": self.marca(), "automatico": self._automatico(),
                 "version_extension": version_extension(), "carpeta_extension": str(RAIZ_PROYECTO / "extension")}
 
     def versiones(self) -> dict:
@@ -140,10 +144,44 @@ class Actualizador:
                     mensaje="Hay actualizaciones disponibles." if pendientes else "Todo está al día.")
         return self.estado()
 
-    def buscar_si_toca(self) -> None:
-        """Al abrir la app: busca (sin instalar) si hace más de un día de la última vez."""
+    def revisar_automatico(self) -> str:
+        """Busca si toca y, con «Actualizar automáticamente», instala lo nuevo en cuanto no haya descargas en curso.
+
+        Devuelve qué hizo: "ocupado" | "nada" | "esperando" (hay descargas: se reintenta en la próxima revisión) | "actualizando".
+        """
+        if self.ocupado():
+            return "ocupado"
         if time.time() - (self._estado.get("ultima_busqueda") or 0) > BUSQUEDA_AUTOMATICA_SEG:
-            self.buscar_en_segundo_plano()
+            self.buscar()
+        pendientes = self._estado["pendientes"]
+        if not pendientes or not self._automatico():
+            return "nada"
+        if self.modo == "portatil" and any(p["tipo"] == "app" for p in pendientes):
+            return "nada"                     # la versión portátil no puede reinstalarse sola: se avisa en Ajustes
+        if self._hay_descargas():
+            return "esperando"
+        self.iniciar(automatica=True)
+        return "actualizando"
+
+    def iniciar_vigilancia(self, primera_espera: float = 60) -> None:
+        """Al abrir la app: revisa al minuto y luego cada hora, en un hilo que no molesta a nada más."""
+        def bucle():
+            time.sleep(primera_espera)
+            while True:
+                try:
+                    self.revisar_automatico()
+                except Exception:
+                    pass                      # sin conexión, etc.: se vuelve a intentar en la próxima vuelta
+                time.sleep(REVISION_SEG)
+        threading.Thread(target=bucle, name="actualizaciones", daemon=True).start()
+
+    def aviso_tras_reinicio(self) -> list[str] | None:
+        """Lo que se actualizó solo (para avisar una vez al volver a abrir la app); None si no hay nada que contar."""
+        m = self.marca()
+        if not m.get("automatica") or m.get("avisada") or time.time() * 1000 - (m.get("id") or 0) > 15 * 60 * 1000:
+            return None
+        self._escribir_archivo("actualizacion.json", {**m, "avisada": True})
+        return list(m.get("hechos") or [])
 
     def buscar_en_segundo_plano(self) -> None:
         self._en_hilo(self.buscar)
@@ -182,7 +220,7 @@ class Actualizador:
         threading.Timer(0.5, self.al_reiniciar).start()
 
     # --- actualizar --------------------------------------------------------------------------------
-    def iniciar(self) -> dict:
+    def iniciar(self, automatica: bool = False) -> dict:
         """Busca y aplica todo lo pendiente en un hilo aparte. Devuelve el estado inmediatamente."""
         if self.ocupado():
             return self.estado()
@@ -190,7 +228,8 @@ class Actualizador:
             raise ErrorGestor(CodigoError.CONFIGURACION, "Hay descargas en curso.",
                               causa="Para actualizar hay que reiniciar la aplicación.",
                               solucion="Espera a que terminen (o cancélalas) y vuelve a pulsar «Actualizar».")
-        self._fijar(fase="actualizando", mensaje="Preparando…", hechos=[], reiniciar=False)
+        self._es_automatica = automatica
+        self._fijar(fase="actualizando", mensaje="Actualizando sola…" if automatica else "Preparando…", hechos=[], reiniciar=False)
         self._en_hilo(self._actualizar)
         return self.estado()
 
@@ -255,7 +294,7 @@ class Actualizador:
 
         recargar = bool(app) and self.modo != "portatil"
         self._escribir_archivo("actualizacion.json", {"id": time.time_ns() // 1_000_000, "recargar_extension": recargar,
-                                                      "hechos": hechos, "version": __version__})
+                                                      "hechos": hechos, "version": __version__, "automatica": self._es_automatica})
         reiniciar = bool(comps) or (bool(app) and self.modo != "portatil")
         mensaje = "Listo. " + ("Reiniciando la aplicación; la extensión se recargará sola." if reiniciar else "")
         self._fijar(fase="listo", mensaje=mensaje.strip(), hechos=hechos, pendientes=[], reiniciar=reiniciar)

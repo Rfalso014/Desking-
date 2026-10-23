@@ -89,5 +89,6 @@ class Preferencias:
     tema: str = "auto"                       # "auto" | "claro" | "oscuro"
     velocidad: str = "rapida"               # "normal" | "rapida" | "maxima" (ver PERFILES_VELOCIDAD)
     reanudar_al_iniciar: bool = True         # recuperar tareas pendientes al abrir
+    actualizar_solo: bool = True             # instalar las versiones nuevas sin preguntar (cuando no hay descargas)
     sesion_navegador: str = "ninguno"        # "ninguno" | uno de NAVEGADORES_SESION: usar su sesión iniciada
     archivo_cookies: str = ""                # alternativa: ruta de un cookies.txt exportado

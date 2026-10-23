@@ -99,7 +99,8 @@ def main() -> int:
     cola.limpiar_temporales()
     from .actualizador import ARGS_INSTALADOR, Actualizador, comando_reinicio, lanzar_desacoplado
     from .modelos import ESTADOS_ACTIVOS
-    actualizador = Actualizador(hay_descargas=lambda: bool(cola.listar(estados=list(ESTADOS_ACTIVOS), limite=1)))
+    actualizador = Actualizador(hay_descargas=lambda: bool(cola.listar(estados=list(ESTADOS_ACTIVOS), limite=1)),
+                                automatico=lambda: db.cargar_preferencias().actualizar_solo)
     ventana = VentanaPrincipal(cola, vinculacion, actualizador)
 
     class _Aviso(QObject):               # el IPC corre en otro hilo; Qt exige tocar la ventana desde el principal
@@ -120,7 +121,7 @@ def main() -> int:
     actualizador.al_instalar = lambda ruta: aviso.instalar.emit(str(ruta))
     actualizador.al_abrir_url = lambda url: __import__("webbrowser").open(url)
     ipc.manejador.actualizador = actualizador
-    actualizador.buscar_si_toca()
+    actualizador.iniciar_vigilancia()           # busca cada 6 h y, si está activado, se actualiza sola
 
     bandeja = None
     if QSystemTrayIcon.isSystemTrayAvailable():
@@ -141,6 +142,9 @@ def main() -> int:
         bandeja.setContextMenu(menu)
         bandeja.activated.connect(lambda r: ventana.mostrar_al_frente() if r in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
         bandeja.show()
+        hechos = actualizador.aviso_tras_reinicio()
+        if hechos:                                  # volvió a abrirse tras actualizarse sola: se avisa una vez
+            bandeja.showMessage("Gestor de Descargas se actualizó", "\n".join(hechos[:4]) or "Ya tienes la última versión.")
         ventana.ocultar_al_cerrar = True
     if not (segundo_plano and bandeja):
         ventana.show()

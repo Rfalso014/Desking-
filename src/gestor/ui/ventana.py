@@ -660,6 +660,9 @@ class VentanaPrincipal(QMainWindow):
         self.act_versiones = QLabel(); self.act_versiones.setWordWrap(True)
         self.act_estado = QLabel(); self.act_estado.setWordWrap(True)
         f5.addRow("Versiones", self.act_versiones); f5.addRow("Estado", self.act_estado)
+        self.c_auto = QCheckBox("Actualizar automáticamente (busca cada 6 horas e instala cuando no hay descargas en curso)")
+        self.c_auto.setChecked(p.actualizar_solo)
+        self.c_auto.toggled.connect(self._fijar_auto); f5.addRow("", self.c_auto)
         self.b_buscar_act = _boton("Buscar", tip="Solo consulta qué hay nuevo; no instala nada")
         self.b_actualizar = _boton("Actualizar aplicación y extensión", primario=True,
                                    tip="Actualiza la aplicación, la extensión y las librerías (yt-dlp…) y reinicia la aplicación")
@@ -739,6 +742,9 @@ class VentanaPrincipal(QMainWindow):
 
     def _quitar_host(self) -> None:
         instalador.desinstalar(); self._actualizar_estado_sistema()
+
+    def _fijar_auto(self, activo: bool) -> None:
+        p = self.db.cargar_preferencias(); p.actualizar_solo = activo; self.db.guardar_preferencias(p)
 
     def _actualizar_todo(self) -> None:
         try:

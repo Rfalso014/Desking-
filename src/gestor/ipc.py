@@ -124,6 +124,10 @@ class Manejador:
             if accion == "reiniciar":
                 a.reiniciar()
                 return {}
+            if "automatico" in d:                                   # casilla «Actualizar automáticamente»
+                p = c.db.cargar_preferencias()
+                p.actualizar_solo = d["automatico"]
+                c.db.guardar_preferencias(p)
             if d.get("buscar") and not a.ocupado():
                 a.buscar_en_segundo_plano()
             return _sin_detalles(a.estado())
