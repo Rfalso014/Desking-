@@ -93,14 +93,15 @@ def main() -> int:
                 QMessageBox.information(None, "Gestor de Descargas", "La aplicación ya está abierta.")
             db.cerrar()
             return 0
-    ipc.iniciar()
-    cola.iniciar()
-    cola.recuperar()
-    cola.limpiar_temporales()
     from .actualizador import ARGS_INSTALADOR, Actualizador, comando_reinicio, lanzar_desacoplado
     from .modelos import ESTADOS_ACTIVOS
     actualizador = Actualizador(hay_descargas=lambda: bool(cola.listar(estados=list(ESTADOS_ACTIVOS), limite=1)),
                                 automatico=lambda: db.cargar_preferencias().actualizar_solo)
+    ipc.manejador.actualizador = actualizador        # antes de atender a la extensión
+    ipc.iniciar()
+    cola.iniciar()
+    cola.recuperar()
+    cola.limpiar_temporales()
     ventana = VentanaPrincipal(cola, vinculacion, actualizador)
 
     class _Aviso(QObject):               # el IPC corre en otro hilo; Qt exige tocar la ventana desde el principal
@@ -120,7 +121,6 @@ def main() -> int:
     actualizador.al_reiniciar = aviso.reiniciar.emit
     actualizador.al_instalar = lambda ruta: aviso.instalar.emit(str(ruta))
     actualizador.al_abrir_url = lambda url: __import__("webbrowser").open(url)
-    ipc.manejador.actualizador = actualizador
     actualizador.iniciar_vigilancia()           # busca cada 6 h y, si está activado, se actualiza sola
 
     bandeja = None
