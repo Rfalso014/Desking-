@@ -1,3 +1,5 @@
+> **Versión de prueba** (rama `web`). Se instala igual que cualquier otra, pero las instalaciones 1.x no se actualizan solas a ella.
+
 ## Novedades de la 2.0.0
 
 - **Ahora es una web** que funciona en tu propio equipo (http://127.0.0.1:7878). `GestorDescargas.exe` es un panel pequeño para **encender, apagar y reiniciar** el gestor, con la opción «Encender con Windows».

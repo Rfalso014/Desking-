@@ -1,9 +1,12 @@
 # Publica la versión actual en GitHub Releases para que se pueda descargar el instalador sin compilar nada:
 # crea el release v<versión> (con su etiqueta) sobre el commit actual y le sube el instalador y el .zip portátil.
 # Antes: .\scripts\empaquetar.ps1 y subir los commits (git push); el commit actual tiene que estar en GitHub.
-# Uso (PowerShell, desde la raíz del proyecto):   .\scripts\publicar_release.ps1
+# Uso (PowerShell, desde la raíz del proyecto):   .\scripts\publicar_release.ps1 [-Prerelease]
+#   -Prerelease: versión de prueba. Se puede descargar, pero no cuenta como «la más reciente»: las instalaciones no
+#   se actualizan solas a ella y el enlace «Descargar» del README sigue llevando a la última versión oficial.
 # Credencial: la variable GITHUB_TOKEN o, si no existe, la misma que usa git (Administrador de credenciales).
 # Si el release ya existe, reemplaza sus archivos (sirve para corregir una subida).
+param([switch]$Prerelease)
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
@@ -42,7 +45,8 @@ try {
 } catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
     $notas = [IO.File]::ReadAllText((Join-Path $raiz "docs\NOTAS_RELEASE.md"))   # Get-Content mete PSPath, etc. en el JSON
-    $cuerpo = @{ tag_name = $etiqueta; target_commitish = $commit; name = "Gestor de Descargas $version"; body = $notas } | ConvertTo-Json
+    $cuerpo = @{ tag_name = $etiqueta; target_commitish = $commit; name = "Gestor de Descargas $version"; body = $notas;
+                 prerelease = [bool]$Prerelease; make_latest = $(if ($Prerelease) { "false" } else { "true" }) } | ConvertTo-Json
     $release = Invoke-RestMethod "$api/releases" -Method Post -Headers $cabeceras `
         -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($cuerpo))
     Write-Host "Release $etiqueta creado."
