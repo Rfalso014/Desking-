@@ -26,14 +26,17 @@ def quitar_puente_antiguo(*, datos: Path | None = None, bases: tuple[str, ...] =
         except OSError:
             pass
     raiz = datos or carpeta_datos()
-    for ruta in sorted((raiz / "nativo").glob("*")) if (raiz / "nativo").is_dir() else []:
-        ruta.unlink(missing_ok=True)
-        habia = True
-    for ruta in (raiz / "nativo", raiz / "host.json", raiz / "host.log", raiz / "ipc.key"):
-        if ruta.is_dir():
-            ruta.rmdir()
-            habia = True
-        elif ruta.exists():
-            ruta.unlink()
-            habia = True
+    nativo = sorted((raiz / "nativo").glob("*")) if (raiz / "nativo").is_dir() else []
+    # Cada cosa por separado: si una está en uso (p. ej. el navegador tiene abierta la carpeta), se sigue con las
+    # demás y se reintenta en el próximo encendido.
+    for ruta in (*nativo, raiz / "nativo", raiz / "host.json", raiz / "host.log", raiz / "ipc.key"):
+        try:
+            if ruta.is_dir():
+                ruta.rmdir()
+                habia = True
+            elif ruta.exists():
+                ruta.unlink()
+                habia = True
+        except OSError:
+            pass
     return habia
