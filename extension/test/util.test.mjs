@@ -4,7 +4,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
   accionesDisponibles, armarRecursos, formatearTiempo, opcionesRecorte, parsearTiempo, textoTramos, validarTramos, compararVersiones, esErrorDeVersion, tamanosPorCalidad, atributoTema, claveRecurso, claveVideo, construirOpciones, elementosDesdeOpciones, fusionarRecursos, siguienteTema, elegirUrlParaMenu, elegirUrlParaVideo, enlaceVecino, esEnlaceDeVideo, esPaginaDeFeed, esUrlWeb, filtrarTareas, formatearCodigo, formatearDuracion, formatearEta,
-  formatearTamano, formatearVelocidad, mensajeErrorNativo, miniaturaSegura, nombreNavegador, nombreSitio, resumenCola,
+  formatearTamano, formatearVelocidad, mensajeSinServidor, esMedioDirecto, ordenarMedios, miniaturaSegura, nombreNavegador, nombreSitio, resumenCola,
 } from "../util.js";
 
 test("solo http/https son URLs web", () => {
@@ -80,12 +80,34 @@ test("menú contextual: no manda la dirección de un feed", () => {
   assert.equal(elegirUrlParaMenu({ srcUrl: "blob:https://x.com/1", pageUrl: "https://x.com/a/status/1" }, {}), "https://x.com/a/status/1");
 });
 
-test("errores nativos se traducen", () => {
-  assert.match(mensajeErrorNativo("Specified native messaging host not found.").mensaje, /No está instalado/);
-  assert.match(mensajeErrorNativo("Access to the specified native messaging host is forbidden.").mensaje, /no permite/);
-  const otro = mensajeErrorNativo("algo raro");
-  assert.equal(otro.detalle, "algo raro");
-  assert.ok(otro.solucion);
+test("gestor apagado o sin respuesta: mensaje comprensible", () => {
+  assert.match(mensajeSinServidor().mensaje, /apagado/);
+  assert.match(mensajeSinServidor(true).mensaje, /a tiempo/);
+  assert.match(mensajeSinServidor().solucion, /GestorDescargas\.exe/);
+});
+
+test("enlaces directos de video: listas completas sí, trozos y anuncios no", () => {
+  assert.deepEqual(esMedioDirecto("https://cdn.x.com/v/master.m3u8?t=1"), { tipo: "hls", prioridad: 0 });
+  assert.equal(esMedioDirecto("https://cdn.x.com/v/manifest", "application/dash+xml").tipo, "dash");
+  assert.equal(esMedioDirecto("https://cdn.x.com/peli.mp4", "", 9e6).tipo, "video");
+  assert.equal(esMedioDirecto("https://cdn.x.com/stream", "video/mp4").tipo, "video");
+  assert.equal(esMedioDirecto("https://cdn.x.com/cancion.mp3").tipo, "audio");
+  assert.equal(esMedioDirecto("https://cdn.x.com/v/seg-12.ts"), null);
+  assert.equal(esMedioDirecto("https://cdn.x.com/v/chunk-3.m4s"), null);
+  assert.equal(esMedioDirecto("https://cdn.x.com/v/x", "video/mp2t"), null);
+  assert.equal(esMedioDirecto("https://cdn.x.com/v/a.mp4?range=0-1000"), null);
+  assert.equal(esMedioDirecto("https://rr1---sn-x.googlevideo.com/videoplayback?x=1", "video/webm"), null);
+  assert.equal(esMedioDirecto("https://cdn.x.com/anuncio.mp4", "", 20000), null);
+  assert.equal(esMedioDirecto("https://cdn.x.com/pagina.html", "text/html"), null);
+  assert.equal(esMedioDirecto("blob:https://x.com/1"), null);
+});
+
+test("enlaces directos: primero la lista maestra, luego video, luego audio", () => {
+  const orden = ordenarMedios([
+    { url: "a.mp3", tipo: "audio", prioridad: 3, visto: 1 }, { url: "v.mp4", tipo: "video", prioridad: 2, visto: 2 },
+    { url: "variante.m3u8", tipo: "hls", prioridad: 0, visto: 5 }, { url: "maestra.m3u8", tipo: "hls", prioridad: 0, visto: 3 },
+  ]).map((m) => m.url);
+  assert.deepEqual(orden, ["maestra.m3u8", "variante.m3u8", "v.mp4", "a.mp3"]);
 });
 
 test("acciones por estado", () => {

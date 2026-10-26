@@ -1,12 +1,10 @@
-"""Protocolo de mensajes extensión <-> host <-> aplicación (JSON, versión 1).
+"""Protocolo de mensajes página web / extensión <-> servidor del gestor (JSON, versión 1).
 
 Petición : {"v": 1, "id": "abc", "accion": "encolar", "token": "<token de vinculación>", "datos": {...}}
 Respuesta: {"v": 1, "id": "abc", "ok": true,  "datos": {...}}
            {"v": 1, "id": "abc", "ok": false, "error": {"codigo", "mensaje", "causa", "solucion"}}
 
-Se valida de forma ESTRICTA (lista blanca de acciones y de campos). El host lo
-valida primero y la aplicación lo vuelve a validar (nunca se confía en quien
-envía). Este módulo no importa nada pesado: el host debe arrancar rápido.
+Se valida de forma ESTRICTA (lista blanca de acciones y de campos): nunca se confía en quien envía.
 """
 import re
 from typing import Any
@@ -24,6 +22,9 @@ _CODIGO = re.compile(r"^[A-Za-z0-9 -]{4,16}$")
 
 # Acciones que se pueden usar SIN estar vinculado.
 SIN_TOKEN = {"ping", "emparejar", "mostrar"}
+# Acciones que solo puede pedir la página del gestor (token local), nunca la extensión.
+SOLO_WEB = {"vinculos", "elegir_carpeta", "apagar", "reiniciar"}
+MAX_COOKIES = 400
 _ESTADOS = {e.value for e in EstadoTarea}
 
 # accion -> (campos obligatorios, campos opcionales)
@@ -31,8 +32,23 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "ping": (set(), set()),
     "mostrar": (set(), set()),
     "analizar": ({"url"}, set()),
-    "detectar": ({"url"}, {"origen", "opciones", "forzar"}),   # forzar = añadirlo aunque ya esté en la lista
-    "encolar": ({"url"}, {"origen", "opciones", "forzar"}),
+    "detectar": ({"url"}, {"origen", "opciones", "forzar", "cookies"}),   # forzar = añadirlo aunque ya esté en la lista
+    "encolar": ({"url"}, {"origen", "opciones", "forzar", "cookies"}),
+    # añadir con el modo elegido: «instantanea» (empieza ya) o «grupo» (espera en un grupo); cookies = sesión del sitio
+    "anadir": ({"url"}, {"origen", "opciones", "forzar", "cookies", "modo", "grupo"}),
+    "iniciar_todas": (set(), set()),
+    "resumen": (set(), set()),
+    "grupos": (set(), set()),
+    "grupo_crear": ({"nombre"}, set()),
+    "grupo_activar": ({"nombre"}, set()),
+    "grupo_renombrar": ({"nombre", "nuevo"}, set()),
+    "grupo_eliminar": ({"nombre"}, set()),
+    "grupo_iniciar": ({"nombre"}, set()),
+    "preferencias": (set(), {"cambios"}),   # sin cambios = leerlas
+    "vinculos": (set(), {"revocar"}),        # código de vinculación y extensiones vinculadas
+    "abrir_raiz": (set(), set()),
+    "elegir_carpeta": (set(), set()),
+    "apagar": (set(), set()),
     "iniciar": ({"id"}, {"opciones"}),
     "listar": (set(), {"estados", "texto", "limite"}),
     "estado": ({"id"}, set()),
@@ -46,7 +62,7 @@ ACCIONES: dict[str, tuple[set[str], set[str]]] = {
     "limpiar": (set(), set()),
     "actualizacion": (set(), {"buscar", "automatico"}),   # estado de «Actualizar…»; buscar y activar «automático» (opcional)
     "actualizar": (set(), set()),           # empieza a actualizar todo
-    "reiniciar": (set(), set()),            # cierra y vuelve a abrir la app (p. ej. si quedó una versión anterior abierta)
+    "reiniciar": (set(), set()),            # apaga y vuelve a encender el servidor
 }
 
 
@@ -108,11 +124,30 @@ def validar_mensaje(msg: Any) -> dict:
         if not isinstance(datos["codigo"], str) or not _CODIGO.match(datos["codigo"]):
             raise _malo("Código de vinculación no válido.")
         limpio["codigo"] = datos["codigo"]
-    if "nombre" in datos:
-        n = datos["nombre"]
-        if not isinstance(n, str) or not 1 <= len(n.strip()) <= 40:
-            raise _malo("Nombre no válido (1 a 40 caracteres).")
-        limpio["nombre"] = n.strip()
+    for clave in ("nombre", "nuevo", "grupo"):
+        if clave in datos:
+            n = datos[clave]
+            if not isinstance(n, str) or not 1 <= len(n.strip()) <= 60 or any(ord(ch) < 32 for ch in n):
+                raise _malo("Nombre no válido (1 a 60 caracteres).")
+            limpio[clave] = n.strip()
+    if "modo" in datos:
+        if datos["modo"] not in ("instantanea", "grupo"):
+            raise _malo("Modo de añadir no válido.")
+        limpio["modo"] = datos["modo"]
+    if "cookies" in datos:
+        ck = datos["cookies"]
+        if not isinstance(ck, list) or len(ck) > MAX_COOKIES or not all(isinstance(x, dict) for x in ck):
+            raise _malo("Sesión del navegador no válida.")
+        limpio["cookies"] = ck                               # cada cookie se sanea en cola.limpiar_cookies
+    if "cambios" in datos:
+        if not isinstance(datos["cambios"], dict) or len(datos["cambios"]) > 30:
+            raise _malo("Cambios de preferencias no válidos.")
+        limpio["cambios"] = datos["cambios"]                 # cada valor se valida en api.PREFERENCIAS_EDITABLES
+    if "revocar" in datos:
+        r = datos["revocar"]
+        if not isinstance(r, int) or isinstance(r, bool) or r < 1:
+            raise _malo("Vínculo no válido.")
+        limpio["revocar"] = r
     if "estados" in datos:
         e = datos["estados"]
         if not isinstance(e, list) or len(e) > 8 or not all(isinstance(x, str) and x in _ESTADOS for x in e):

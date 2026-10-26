@@ -1,14 +1,16 @@
 ﻿# Dependencias. Cada una con una responsabilidad concreta:
 #   yt-dlp[default] -> motor de descarga (+ solucionador de desafios JS "yt-dlp-ejs")
-#   PySide6         -> interfaz grafica
+#   curl_cffi       -> presentarse como Chrome en sitios con proteccion anti-bots (Cloudflare): evita muchos 403
 #   httpx           -> descarga de imagenes por enlace directo
 #   Pillow          -> verificar que un archivo es realmente una imagen
 #   gallery-dl      -> galerias de imagenes (se ejecuta como proceso aparte)
 #   pytest          -> pruebas
+# La interfaz es una pagina web servida por la biblioteca estandar de Python (http.server) y el panel de
+# control usa tkinter (incluido en Python): no hacen falta dependencias para eso.
 # Las versiones se fijan con == para que el entorno sea reproducible.
-yt-dlp[default]==2026.8.19
-PySide6==6.12.0
+yt-dlp[default]==2026.10.21
+curl_cffi==0.14.0
 httpx==0.28.1
 Pillow==12.3.0
-gallery-dl==1.32.16
+gallery-dl==1.32.18
 pytest>=8

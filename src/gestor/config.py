@@ -92,3 +92,8 @@ class Preferencias:
     actualizar_solo: bool = True             # instalar las versiones nuevas sin preguntar (cuando no hay descargas)
     sesion_navegador: str = "ninguno"        # "ninguno" | uno de NAVEGADORES_SESION: usar su sesión iniciada
     archivo_cookies: str = ""                # alternativa: ruta de un cookies.txt exportado
+    carpeta_propia: bool = True              # cada video en su propia carpeta (False = sueltos en Videos, Musica...)
+    modo_anadir: str = "instantanea"         # "instantanea" (descarga al añadir) | "grupo" (espera en un grupo)
+    grupo_activo: str = "General"            # grupo donde caen los videos en modo «grupo»
+    grupos: tuple[str, ...] = ("General",)   # grupos creados (pueden estar vacios)
+    carpeta_grupo: bool = True               # al descargar un grupo, guardarlo en una carpeta con su nombre

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="gestor-token" content="{{TOKEN}}">
+  <meta name="gestor-version" content="{{VERSION}}">
+  <title>Gestor de Descargas</title>
+  <link rel="icon" href="icono.png">
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <!-- Íconos (trazos al estilo Tabler) -->
+  <svg width="0" height="0" class="sprite" aria-hidden="true">
+    <symbol id="i-descarga" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></symbol>
+    <symbol id="i-lista" viewBox="0 0 24 24"><path d="M9 6l11 0"/><path d="M9 12l11 0"/><path d="M9 18l11 0"/><path d="M5 6l0 .01"/><path d="M5 12l0 .01"/><path d="M5 18l0 .01"/></symbol>
+    <symbol id="i-grupos" viewBox="0 0 24 24"><path d="M4 4h6v6h-6z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6h-6z"/><path d="M14 14h6v6h-6z"/></symbol>
+    <symbol id="i-ajustes" viewBox="0 0 24 24"><path d="M12 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 6l8 0"/><path d="M16 6l4 0"/><path d="M6 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 12l2 0"/><path d="M10 12l10 0"/><path d="M15 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 18l11 0"/><path d="M19 18l1 0"/></symbol>
+    <symbol id="i-carpeta" viewBox="0 0 24 24"><path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></symbol>
+    <symbol id="i-reintentar" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></symbol>
+    <symbol id="i-papelera" viewBox="0 0 24 24"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13 -8z"/></symbol>
+    <symbol id="i-recortar" viewBox="0 0 24 24"><path d="M4 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M4 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M9.15 14.85l8.85 -10.85"/><path d="M9.15 9.15l8.85 10.85"/></symbol>
+    <symbol id="i-buscar" viewBox="0 0 24 24"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></symbol>
+    <symbol id="i-luna" viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 9h.01"/><path d="M11 12h1v4h1"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z"/></symbol>
+    <symbol id="i-musica" viewBox="0 0 24 24"><path d="M3 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/><path d="M13 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/><path d="M9 17v-13h10v13"/><path d="M9 8h10"/></symbol>
+  </svg>
+
+  <div class="app">
+    <nav class="lateral" aria-label="Secciones">
+      <div class="marca">
+        <span class="marca-logo"><svg class="ic"><use href="#i-descarga"/></svg></span>
+        <div><b>Gestor de Descargas</b><span>en este equipo</span></div>
+      </div>
+      <button class="nav" data-vista="descargas" aria-current="page"><svg class="ic"><use href="#i-lista"/></svg>Descargas<span class="cuenta" id="cuenta-activas" hidden></span></button>
+      <button class="nav" data-vista="grupos"><svg class="ic"><use href="#i-grupos"/></svg>Grupos<span class="cuenta" id="cuenta-grupos" hidden></span></button>
+      <button class="nav" data-vista="ajustes"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</button>
+      <div class="lateral-pie">
+        <span class="conexion" id="conexion" role="status"><i></i><span>Conectando…</span></span>
+        <button class="tema" id="btn-tema" title="Cambiar tema"><svg class="ic"><use href="#i-luna"/></svg><span>Tema: automático</span></button>
+      </div>
+    </nav>
+
+    <main class="principal">
+      <div id="banda-conexion" class="banda" hidden>
+        <svg class="ic"><use href="#i-info"/></svg>
+        <span>No hay conexión con el servidor del gestor. Enciéndelo con <b>GestorDescargas.exe</b> (panel de control); esta página se reconecta sola.</span>
+      </div>
+
+      <!-- ===================== Descargas ===================== -->
+      <section id="vista-descargas">
+        <div class="cabecera">
+          <div><h1>Descargas</h1><p>Pega un enlace o añádelo desde la extensión del navegador.</p></div>
+        </div>
+
+        <form class="tarjeta anadir" id="form-anadir" autocomplete="off">
+          <div class="anadir-fila">
+            <input class="entrada" id="url" type="url" placeholder="https://… enlace del video, la canción o la lista" aria-label="Enlace" required>
+            <button class="boton primario" id="btn-anadir" type="submit"><svg class="ic"><use href="#i-descarga"/></svg><span>Descargar</span></button>
+          </div>
+          <div class="anadir-opciones">
+            <div class="segmentos" id="seg-modo" role="group" aria-label="Qué descargar">
+              <button type="button" data-valor="video" aria-pressed="true"><svg class="ic"><use href="#i-video"/></svg>Video</button>
+              <button type="button" data-valor="audio" aria-pressed="false"><svg class="ic"><use href="#i-musica"/></svg>Solo audio</button>
+              <button type="button" data-valor="subtitulos" aria-pressed="false">Subtítulos</button>
+              <button type="button" data-valor="portada" aria-pressed="false">Portada</button>
+            </div>
+            <label class="grupo-campo" id="campo-calidad">Calidad
+              <select class="selector" id="sel-calidad">
+                <option value="">La mejor</option><option value="2160">4K</option><option value="1080">1080p</option>
+                <option value="720">720p</option><option value="480">480p</option>
+              </select>
+            </label>
+            <span class="separador" aria-hidden="true"></span>
+            <div class="segmentos" id="seg-cuando" role="group" aria-label="Cuándo descargar">
+              <button type="button" data-valor="instantanea" aria-pressed="true">Descargar ya</button>
+              <button type="button" data-valor="grupo" aria-pressed="false">Al grupo</button>
+            </div>
+            <select class="selector" id="sel-grupo" aria-label="Grupo" hidden></select>
+            <label class="interruptor" title="Si está apagado, el archivo queda suelto en Videos (o Música) en vez de en una carpeta con su título">
+              <input type="checkbox" id="chk-carpeta"><span><b>En su propia carpeta</b></span>
+            </label>
+            <button type="button" class="boton texto" id="btn-recortar" aria-expanded="false"><svg class="ic"><use href="#i-recortar"/></svg>Recortar</button>
+          </div>
+          <div class="recorte" id="recorte" hidden>
+            <p class="tenue chico">Descarga solo estos trozos. Escribe el tiempo como 1:30 o 01:02:15.</p>
+            <div id="tramos"></div>
+            <div class="fila-botones">
+              <button type="button" class="boton texto" id="btn-tramo">+ Otro trozo</button>
+              <label class="interruptor"><input type="checkbox" id="chk-exacto"><span><b>Corte exacto</b><small>Empieza en el segundo justo (convierte el trozo; tarda un poco más).</small></span></label>
+            </div>
+          </div>
+          <p class="aviso-linea" id="error-anadir" role="alert" hidden></p>
+        </form>
+
+        <div class="barra-lista">
+          <div class="segmentos" id="seg-filtro" role="group" aria-label="Mostrar">
+            <button type="button" data-valor="todas" aria-pressed="true">Todas</button>
+            <button type="button" data-valor="curso" aria-pressed="false">En curso</button>
+            <button type="button" data-valor="listas" aria-pressed="false">Terminadas</button>
+            <button type="button" data-valor="errores" aria-pressed="false">Con error</button>
+          </div>
+          <label class="buscar"><svg class="ic tenue"><use href="#i-buscar"/></svg><input class="entrada" id="buscar" type="search" placeholder="Buscar por título o sitio" aria-label="Buscar"></label>
+          <button class="boton texto" id="btn-limpiar" title="Quita de la lista las terminadas, canceladas y con error (no borra archivos)">Limpiar terminadas</button>
+        </div>
+        <div id="secciones"></div>
+      </section>
+
+      <!-- ===================== Grupos ===================== -->
+      <section id="vista-grupos" hidden>
+        <div class="cabecera">
+          <div><h1>Grupos</h1><p>Junta varios videos y descárgalos todos de una vez.</p></div>
+        </div>
+        <div class="tarjeta explicacion">
+          <svg class="ic"><use href="#i-info"/></svg>
+          <p class="chico">Con <b>«Al grupo»</b> (aquí o en la extensión) los enlaces esperan en el grupo activo sin descargarse.
+            Pulsa <b>Descargar grupo</b> cuando quieras. <span id="txt-carpeta-grupo"></span></p>
+        </div>
+        <form class="grupo-nuevo" id="form-grupo" autocomplete="off">
+          <input class="entrada" id="nombre-grupo" maxlength="60" placeholder="Nombre del grupo nuevo (p. ej. Curso de guitarra)" aria-label="Nombre del grupo" required>
+          <button class="boton primario" type="submit">Crear grupo</button>
+        </form>
+        <div class="grupos" id="lista-grupos"></div>
+      </section>
+
+      <!-- ===================== Ajustes ===================== -->
+      <section id="vista-ajustes" hidden>
+        <div class="cabecera"><div><h1>Ajustes</h1><p>Se guardan al momento.</p></div></div>
+        <div class="ajustes">
+          <div class="tarjeta bloque">
+            <h2>Dónde se guarda</h2>
+            <p class="tenue">Todas las descargas van dentro de esta carpeta.</p>
+            <div class="campos">
+              <div class="ruta"><code id="aj-carpeta">—</code>
+                <button class="boton borde" id="btn-cambiar-carpeta">Cambiar…</button>
+                <button class="boton texto" id="btn-abrir-raiz"><svg class="ic"><use href="#i-carpeta"/></svg>Abrir</button></div>
+              <label class="interruptor"><input type="checkbox" data-pref="carpeta_propia"><span><b>Cada descarga en su propia carpeta</b>
+                <small>Encendido: Videos/Título del video/archivo.mp4. Apagado: Videos/archivo.mp4.</small></span></label>
+              <label class="interruptor"><input type="checkbox" data-pref="carpeta_grupo"><span><b>Guardar cada grupo en una carpeta con su nombre</b>
+                <small>Al descargar un grupo, todo queda junto en «Nombre del grupo».</small></span></label>
+              <label class="campo"><span>Separar por tipo</span>
+                <select class="selector" data-pref="organizacion">
+                  <option value="tipo_y_contenido">Sí: Videos, Música, Subtítulos…</option>
+                  <option value="contenido">No: todo junto en la carpeta</option>
+                  <option value="tipo">Solo por tipo (sin carpeta por título)</option>
+                </select></label>
+              <label class="campo"><span>Si el archivo ya existe</span>
+                <select class="selector" data-pref="duplicados">
+                  <option value="renombrar">Guardar otra copia con (2)</option><option value="omitir">No descargarlo otra vez</option>
+                  <option value="reemplazar">Reemplazarlo</option>
+                </select></label>
+            </div>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Al añadir un enlace</h2>
+            <p class="tenue">Lo que se usa por defecto aquí y en la extensión. Siempre puedes cambiarlo en cada descarga.</p>
+            <div class="campos">
+              <label class="campo"><span>Cuándo descargar</span>
+                <select class="selector" data-pref="modo_anadir">
+                  <option value="instantanea">Al momento (descarga instantánea)</option>
+                  <option value="grupo">Esperar en el grupo activo</option>
+                </select></label>
+              <label class="campo"><span>Calidad máxima</span>
+                <select class="selector" data-pref="altura_max" data-tipo="numero">
+                  <option value="">La mejor disponible</option><option value="2160">4K (2160p)</option><option value="1440">1440p</option>
+                  <option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option>
+                </select></label>
+              <label class="campo"><span>Formato de video</span>
+                <select class="selector" data-pref="contenedor_video"><option value="mp4">MP4 (el más compatible)</option><option value="mkv">MKV</option><option value="mejor">El original del sitio</option></select></label>
+              <label class="campo"><span>Formato de audio</span>
+                <select class="selector" data-pref="formato_audio"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="flac">FLAC</option>
+                  <option value="opus">OPUS</option><option value="ogg">OGG</option><option value="wav">WAV</option><option value="original">El original del sitio</option></select></label>
+              <label class="interruptor"><input type="checkbox" data-pref="descargar_portada"><span><b>Guardar también la portada</b></span></label>
+              <label class="interruptor"><input type="checkbox" data-pref="descargar_subtitulos"><span><b>Guardar también los subtítulos</b>
+                <small>Idiomas: <span id="aj-idiomas"></span></small></span></label>
+            </div>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Velocidad</h2>
+            <div class="campos">
+              <label class="campo"><span>Velocidad</span>
+                <select class="selector" data-pref="velocidad"><option value="normal">Normal</option><option value="rapida">Rápida (recomendada)</option><option value="maxima">Máxima</option></select></label>
+              <label class="campo"><span>Descargas a la vez</span>
+                <select class="selector" data-pref="descargas_simultaneas" data-tipo="numero"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select></label>
+            </div>
+            <p class="tenue chico separado">«Descargas a la vez» se aplica al reiniciar el servidor.</p>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Sitios que piden iniciar sesión</h2>
+            <p class="tenue">Al añadir desde la extensión se usa tu sesión del navegador solo para ese sitio y esa descarga (no se guarda).
+              Para lo que pegues aquí puedes usar la sesión de un navegador:</p>
+            <label class="campo"><span>Sesión de</span>
+              <select class="selector" data-pref="sesion_navegador"><option value="ninguno">Ninguno</option><option value="firefox">Firefox</option>
+                <option value="chrome">Chrome</option><option value="edge">Edge</option><option value="brave">Brave</option><option value="opera">Opera</option><option value="vivaldi">Vivaldi</option></select></label>
+            <p class="tenue chico separado">Chrome y Edge protegen sus cookies: si falla, añade el enlace desde la extensión.</p>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Extensión del navegador</h2>
+            <p class="tenue">Para vincularla, escribe este código en la extensión. Dura 10 minutos y sirve una sola vez.</p>
+            <div class="codigo-vinculo" id="aj-codigo">—</div>
+            <ul class="vinculos" id="aj-vinculos"></ul>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Servidor</h2>
+            <p class="tenue">El gestor funciona en este equipo en <code id="aj-direccion"></code>. Al apagarlo, las descargas en curso se retoman al volver a encenderlo.</p>
+            <div class="campos">
+              <label class="interruptor"><input type="checkbox" data-pref="inicio_windows"><span><b>Encender con Windows</b><small>En segundo plano, sin ventanas.</small></span></label>
+              <label class="interruptor"><input type="checkbox" data-pref="reanudar_al_iniciar"><span><b>Retomar las descargas pendientes al encender</b></span></label>
+              <div class="fila-botones">
+                <button class="boton borde" id="btn-reiniciar"><svg class="ic"><use href="#i-reintentar"/></svg>Reiniciar</button>
+                <button class="boton peligro" id="btn-apagar">Apagar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tarjeta bloque">
+            <h2>Actualizaciones</h2>
+            <p class="tenue" id="act-estado">Los sitios cambian a menudo: mantener yt-dlp al día evita muchos fallos.</p>
+            <div class="campos separado">
+              <label class="interruptor"><input type="checkbox" data-pref="actualizar_solo"><span><b>Actualizar automáticamente</b><small>Busca cada 6 horas e instala cuando no hay descargas.</small></span></label>
+              <div class="fila-botones"><button class="boton borde" id="btn-buscar-act">Buscar ahora</button><button class="boton primario" id="btn-actualizar" hidden>Actualizar</button></div>
+            </div>
+          </div>
+          <p class="tenue chico">Versión <span id="aj-version"></span></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+  <dialog id="dialogo">
+    <h2 id="dialogo-titulo"></h2>
+    <p id="dialogo-texto"></p>
+    <div class="fila-botones"><button class="boton texto" value="no" id="dialogo-no">Cancelar</button><button class="boton primario" value="si" id="dialogo-si">Aceptar</button></div>
+  </dialog>
+</body>
+</html>

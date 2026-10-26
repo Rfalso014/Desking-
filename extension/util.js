@@ -1,6 +1,6 @@
-// Funciones puras compartidas por el service worker y el popup (se prueban con Node).
+// Funciones puras compartidas por el service worker y el panel lateral (se prueban con Node).
 
-export const NOMBRE_HOST = "com.gestor.descargas";
+export const PUERTO_POR_DEFECTO = 7878;      // el gestor web escucha en http://127.0.0.1:7878 (ver src/gestor/control.py)
 
 /** ¿Es una URL http/https? Las blob:, data:, javascript: etc. NO sirven para la app. */
 export function esUrlWeb(u) {
@@ -118,29 +118,47 @@ export function elegirUrlParaVideo(c) {
   return c.pagina && esUrlWeb(c.pagina) && !esPaginaDeFeed(c.pagina) ? c.pagina : null;
 }
 
-/** Traduce los errores crudos de Chrome (connectNative) a mensajes comprensibles. */
-export function mensajeErrorNativo(texto) {
-  const t = String(texto || "");
-  if (/not found/i.test(t)) {
-    return {
-      codigo: "comunicacion",
-      mensaje: "No está instalado el componente de comunicación con la aplicación.",
-      solucion: "Ejecuta el instalador del Gestor de Descargas (o scripts/instalar_host.py) y reinicia el navegador.",
-    };
-  }
-  if (/forbidden/i.test(t)) {
-    return {
-      codigo: "comunicacion",
-      mensaje: "El navegador no permite que esta extensión hable con la aplicación.",
-      solucion: "Reinstala el componente de comunicación: el ID de la extensión no coincide con el autorizado.",
-    };
-  }
+/** Error comprensible cuando el gestor web no contesta (apagado o colgado). */
+export function mensajeSinServidor(agotado = false) {
   return {
     codigo: "comunicacion",
-    mensaje: "No se pudo comunicar con la aplicación de escritorio.",
-    solucion: "Abre «Gestor de Descargas» e inténtalo de nuevo.",
-    detalle: t || undefined,
+    mensaje: agotado ? "El gestor no respondió a tiempo." : "El gestor de descargas está apagado.",
+    solucion: "Enciéndelo con GestorDescargas.exe (o marca «Encender con Windows») y vuelve a intentarlo.",
   };
+}
+
+// --- Enlaces directos de video que pasan por la red (respaldo cuando la página no se puede analizar) ---------
+// prioridad: lista de reproducción HLS/DASH completa > archivo de video > archivo de audio.
+const EXT_MEDIO = { m3u8: ["hls", 0], mpd: ["dash", 1], mp4: ["video", 2], webm: ["video", 2], mov: ["video", 2], m4v: ["video", 2],
+  mkv: ["video", 2], flv: ["video", 2], mp3: ["audio", 3], m4a: ["audio", 3], ogg: ["audio", 3], opus: ["audio", 3], wav: ["audio", 3], flac: ["audio", 3] };
+const TIPO_MEDIO = [[/mpegurl/i, "hls", 0], [/dash\+xml/i, "dash", 1], [/^video\//i, "video", 2], [/^audio\//i, "audio", 3]];
+// Trozos sueltos de un video (no sirven solos) y servidores cuyo video ya entiende yt-dlp desde la página.
+const SEGMENTO = /\.(ts|m4s|aac|vtt|webvtt|key|jpg|png)$|\/(seg|segment|frag|fragment|chunk)[-_]?\d|[?&](range|bytestart|byterange)=/i;
+const SIN_RESPALDO = /(^|\.)(googlevideo\.com|ytimg\.com|doubleclick\.net|googlesyndication\.com|imasdk\.googleapis\.com)$/i;
+const MIN_BYTES = 50 * 1024;
+
+/** { tipo, prioridad } si `url` parece el video completo (o su lista de reproducción); null si no. */
+export function esMedioDirecto(url, contentType = "", largo = null) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol) || SIN_RESPALDO.test(u.hostname)) return null;
+  const ruta = u.pathname.toLowerCase();
+  if (SEGMENTO.test(ruta + u.search) || /mp2t|iso\.segment|text\/vtt/i.test(contentType || "")) return null;
+  const ext = (ruta.match(/\.([a-z0-9]{2,5})$/) || [])[1];
+  let hallado = ext && EXT_MEDIO[ext] ? EXT_MEDIO[ext] : null;
+  if (!hallado) {
+    const t = TIPO_MEDIO.find(([re]) => re.test(contentType || ""));
+    hallado = t ? [t[1], t[2]] : null;
+  }
+  if (!hallado) return null;
+  const [tipo, prioridad] = hallado;
+  if ((tipo === "video" || tipo === "audio") && Number.isFinite(largo) && largo > 0 && largo < MIN_BYTES) return null;   // anuncios, avances
+  return { tipo, prioridad, ...(Number.isFinite(largo) && largo > 0 ? { tamano: largo } : {}) };
+}
+
+/** Lo más útil primero; dentro del mismo tipo, lo que se vio antes (la lista maestra se pide antes que sus variantes). */
+export function ordenarMedios(lista) {
+  return [...lista].sort((a, b) => a.prioridad - b.prioridad || (a.visto || 0) - (b.visto || 0));
 }
 
 export const ETIQUETA_ESTADO = {

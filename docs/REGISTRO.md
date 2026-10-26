@@ -91,3 +91,36 @@
 - `scripts/publicar_release.ps1` crea el release `v<versión>` sobre el commit actual y sube instalador y .zip portátil
   (notas en `docs/NOTAS_RELEASE.md`). El README empieza con el enlace de descarga y el paso de SmartScreen.
 - El repositorio sigue privado: solo quien tenga acceso ve el release; «Buscar actualizaciones» sigue sin poder comprobar.
+
+## Versión 2.0.0: de aplicación de escritorio a web local (2026-10-26)
+- **Decisión:** la interfaz PySide6 y el puente de Native Messaging se sustituyen por un servidor HTTP local
+  (`gestor/web/servidor.py`, biblioteca estándar, solo `127.0.0.1:7878`) que sirve la página (`web/estatico`, HTML/CSS/JS sin
+  compilación, igual que la extensión) y la API. `api.Manejador` es el antiguo manejador del IPC, ampliado. La extensión
+  habla por `fetch` con el servidor (sin host nativo). `GestorDescargas.exe` (= `gestor/control.py`) es un panel tkinter
+  para encender/apagar/reiniciar; con `--servidor` ES el servidor. PySide6 deja de ser dependencia.
+- No se usó la plantilla React + shadcn del generador de artefactos: la página la sirve el propio gestor y el
+  proyecto evita a propósito los pasos de compilación.
+- Seguridad del servidor: Host solo 127.0.0.1/localhost (DNS rebinding), Origin solo la propia página o el ID de nuestra
+  extensión (CSRF), token local nuevo en cada encendido (va dentro de la página; `servidor.json` lo guarda para el
+  panel), CSP estricta. Acciones solo de la página: vínculos, apagar, reiniciar, elegir carpeta. La extensión solo
+  puede cambiar `carpeta_propia`, `carpeta_grupo`, `modo_anadir` y `grupo_activo`.
+- **Fallos fuera de YouTube (diagnóstico con los errores reales de `gestor.db`):** SharePoint/Outlook pedían sesión,
+  Vimeo exige iniciar sesión, otros daban 403. Arreglos: (1) la extensión manda las cookies del sitio con `anadir`
+  (permiso `cookies`); el servidor las tiene solo en memoria y escribe un cookies.txt temporal que borra al terminar;
+  (2) la extensión apunta con `webRequest` los enlaces directos (m3u8/mpd/mp4) que carga el reproductor y los manda
+  como `opciones.medios`; (3) `curl_cffi` + `impersonate` (presentarse como Chrome). La cola prueba en orden: página,
+  página como Chrome, cada enlace directo (Referer = la página), enlace directo como Chrome (`GestorCola._candidatos`).
+  Verificado: página sin video + enlace m3u8 público → descargado y recortado con el título de la página.
+- **Recortar lento:** FFmpeg pedía el archivo en una sola petición y YouTube la frena. Con `-request_size 10M`
+  (FFmpeg 8+; aquí 9.0.2) se pide por partes. Medido con un video de 10 min, trozo de 30 s a 1080p: 25,4 s → 5,8 s.
+  `FACTOR_TROZOS` baja de 20 a 5 (solo se baja entero si los trozos ocupan más de 1/5 del video).
+- Grupos y carpetas: `opciones.grupo` (detectadas = esperando en el grupo), `Preferencias.grupos/grupo_activo/
+  modo_anadir/carpeta_grupo/carpeta_propia`; `organizar(..., carpeta_propia=False)` deja el archivo suelto.
+- Arreglos encontrados al probar: rutas de más de 260 caracteres en carpetas profundas (plantilla de nombre y
+  organizador acortan el título según la ruta real expandida); carrera entre el hilo que lee el título de una tarea
+  detectada y «Descargar grupo»/renombrar grupo (la tarea podía volver a «detectado» y quedarse parada): ahora con candado.
+- Diseño: misma paleta en página, extensión, botón sobre los videos y panel. Oscuro: fondo #1e2124, superficies #262a2e,
+  texto #dcdad5, acento #7fb8a8 (antes violeta #17132b con coral y texto casi blanco).
+- Al encender, el servidor quita lo que registró la 1.x (claves NativeMessagingHosts, `nativo/`, `host.json`, `ipc.key`).
+- **No verificado:** la extensión cargada en un Chrome real (webRequest, cookies, barra lateral): se probó el panel con
+  la API de Chrome simulada y el servidor con las mismas peticiones que manda la extensión.

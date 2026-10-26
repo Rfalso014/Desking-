@@ -29,7 +29,7 @@
   const estilo = document.createElement("style");
   estilo.textContent = `
       .pildora { position: fixed; display: none; align-items: stretch; font: 600 13px/1 system-ui, "Segoe UI", sans-serif;
-                 background: #1f9e94; color: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.45);
+                 background: #2f7d6d; color: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.45);
                  overflow: hidden; user-select: none; }
       .pildora.visible { display: flex; }
       .pildora button { all: unset; cursor: pointer; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
@@ -38,46 +38,46 @@
       .sep { width: 1px; background: rgba(255,255,255,.4); }
       .pildora [hidden] { display: none; }
       .recorte { position: fixed; display: none; width: 292px; box-sizing: border-box; padding: 12px 14px 14px; border-radius: 16px;
-                 background: #17132b; color: #f1eefe; font: 13px/1.4 system-ui, "Segoe UI", sans-serif; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+                 background: #262a2e; color: #dcdad5; font: 13px/1.4 system-ui, "Segoe UI", sans-serif; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
       .recorte.visible { display: block; }
       .recorte * { box-sizing: border-box; }
       .recorte .cab { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 14px; }
-      .recorte .tenue { color: #9a93bf; font-size: 12px; }
+      .recorte .tenue { color: #9a9d9f; font-size: 12px; }
       .recorte .fila { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
-      .recorte .fila span { width: 44px; color: #9a93bf; font-size: 12px; }
-      .recorte input[type=text] { all: unset; flex: 1; min-width: 0; background: #221c3d; border: 1px solid #2e2752; border-radius: 9px;
-                                  padding: 6px 9px; font: 600 13px system-ui; color: #f1eefe; }
-      .recorte input[type=text]:focus { border-color: #ff8a6b; }
+      .recorte .fila span { width: 44px; color: #9a9d9f; font-size: 12px; }
+      .recorte input[type=text] { all: unset; flex: 1; min-width: 0; background: #202326; border: 1px solid #42484e; border-radius: 9px;
+                                  padding: 6px 9px; font: 600 13px system-ui; color: #dcdad5; }
+      .recorte input[type=text]:focus { border-color: #7fb8a8; }
       .recorte button { all: unset; cursor: pointer; border-radius: 999px; padding: 6px 11px; font-weight: 600; font-size: 12px;
-                        background: #2a2349; color: #f1eefe; white-space: nowrap; }
+                        background: #30353a; color: #dcdad5; white-space: nowrap; }
       .recorte button:hover { filter: brightness(1.2); }
-      .recorte button:focus-visible { outline: 2px solid #ff8a6b; outline-offset: 1px; }
-      .recorte button.primario { background: #ff8a6b; color: #3a1206; }
+      .recorte button:focus-visible { outline: 2px solid #7fb8a8; outline-offset: 1px; }
+      .recorte button.primario { background: #7fb8a8; color: #17201d; }
       .recorte button.cerrar { padding: 2px 8px; font-size: 16px; background: transparent; }
       .recorte button:disabled { opacity: .5; cursor: default; }
       .pista { position: fixed; display: none; height: 40px; touch-action: none; user-select: none; }
       .pista.visible { display: block; }
-      .pista .fondo { position: absolute; left: 0; right: 0; top: 16px; height: 8px; border-radius: 4px; background: rgba(23,19,43,.8);
+      .pista .fondo { position: absolute; left: 0; right: 0; top: 16px; height: 8px; border-radius: 4px; background: rgba(30,33,36,.85);
                       box-shadow: 0 1px 6px rgba(0,0,0,.5); cursor: pointer; }
-      .pista .zona { position: absolute; top: 11px; height: 18px; border: 2px solid #ff8a6b; border-radius: 7px; background: rgba(255,138,107,.42);
+      .pista .zona { position: absolute; top: 11px; height: 18px; border: 2px solid #7fb8a8; border-radius: 7px; background: rgba(127,184,168,.4);
                      cursor: grab; box-sizing: border-box; }
       .pista .zona:active { cursor: grabbing; }
-      .pista .manija { position: absolute; top: 4px; width: 14px; height: 32px; margin-left: -7px; border-radius: 7px; background: #ff8a6b;
+      .pista .manija { position: absolute; top: 4px; width: 14px; height: 32px; margin-left: -7px; border-radius: 7px; background: #7fb8a8;
                        border: 2px solid #fff; box-sizing: border-box; cursor: ew-resize; box-shadow: 0 1px 6px rgba(0,0,0,.6); }
-      .pista .manija::after { content: ""; position: absolute; left: 4px; top: 9px; width: 2px; height: 10px; border-left: 1px solid #3a1206;
-                              border-right: 1px solid #3a1206; box-sizing: border-box; }
-      .pista .etq { position: absolute; top: -18px; transform: translateX(-50%); background: #17132b; color: #fff; border-radius: 6px;
+      .pista .manija::after { content: ""; position: absolute; left: 4px; top: 9px; width: 2px; height: 10px; border-left: 1px solid #17201d;
+                              border-right: 1px solid #17201d; box-sizing: border-box; }
+      .pista .etq { position: absolute; top: -18px; transform: translateX(-50%); background: #262a2e; color: #fff; border-radius: 6px;
                     font: 700 11px/1 system-ui, "Segoe UI", sans-serif; padding: 4px 6px; white-space: nowrap; pointer-events: none; }
       .pista .cabezal { position: absolute; top: 8px; width: 2px; height: 24px; margin-left: -1px; background: #fff; pointer-events: none;
                         box-shadow: 0 0 3px rgba(0,0,0,.8); }
       .recorte label { display: flex; gap: 7px; align-items: center; margin-top: 8px; font-size: 12px; cursor: pointer; }
-      .recorte label input { accent-color: #ff8a6b; margin: 0; }
-      .recorte .error { color: #ff9fb0; font-size: 12px; margin-top: 6px; }
+      .recorte label input { accent-color: #7fb8a8; margin: 0; }
+      .recorte .error { color: #e0938a; font-size: 12px; margin-top: 6px; }
       .recorte .acciones { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
     `;
   const crear = (tag, props = {}) => Object.assign(document.createElement(tag), props);
-  const btnVideo = crear("button", { id: "video", textContent: "＋ Añadir", title: "Añadir este video a la lista de Gestor de Descargas (no descarga hasta que tú lo autorices)" });
-  const btnAudio = crear("button", { id: "audio", textContent: "♪", title: "Añadir solo el audio a la lista" });
+  const btnVideo = crear("button", { id: "video", textContent: "＋ Descargar", title: "Mandar este video al Gestor de Descargas (se descarga ya o espera en el grupo, según lo elegido en la extensión)" });
+  const btnAudio = crear("button", { id: "audio", textContent: "♪", title: "Mandar solo el audio al Gestor de Descargas" });
   const btnRecortar = crear("button", { id: "recortar", textContent: "✂", title: "Descargar solo un trozo (marca el inicio y el fin)" });
   const sepRecortar = crear("span", { className: "sep" });
   const pildora = crear("div", { className: "pildora", role: "group" });
@@ -274,7 +274,7 @@
             confirmar = { boton, datos, repetidas: r.repetidas, hasta: Date.now() + 6000 };
             return mostrar(boton, "Ya está en tu lista · pulsa otra vez para repetirlo", 6000);
           }
-          mostrar(boton, r.ok ? (repetir ? "✓ Añadido otra vez" : "✓ En la lista") : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
+          mostrar(boton, r.ok ? (r.datos && r.datos.modo === "grupo" ? `✓ Al grupo «${String(r.datos.grupo).slice(0, 20)}»` : "✓ Descargando") : `✗ ${(r.error && r.error.mensaje) || "Error"}`.slice(0, 60), r.ok ? 2200 : 4500);
         });
       } catch {
         ocupado = false;
@@ -515,7 +515,7 @@
           return;
         }
         if (!r.ok) { rc.descargar.textContent = "Descargar trozo"; rc.error.textContent = [r.error && r.error.mensaje, r.error && r.error.solucion].filter(Boolean).join(" "); return; }
-        rc.descargar.textContent = "✓ Descargando (mira la Cola)";
+        rc.descargar.textContent = r.datos && r.datos.modo === "grupo" ? "✓ Añadido al grupo" : "✓ Descargando";
         setTimeout(cerrarRecorte, 1800);
       });
     } catch {

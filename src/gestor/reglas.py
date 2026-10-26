@@ -95,6 +95,7 @@ def resolver(url: str, sitio: str | None, reglas: list[dict], prefs: Preferencia
         "subtitulos": list(prefs.idiomas_subtitulos) if prefs.descargar_subtitulos else [],
         "portada": prefs.descargar_portada, "editable": False, "tramos": [], "corte_exacto": False,
         "subcarpeta": None, "destino": None, "excluir": False,
+        "carpeta_propia": prefs.carpeta_propia, "grupo": None, "medios": [], "titulo_pagina": None,
     }
     origen = {k: "preferencias globales" for k in campos}
     aplicadas: list[str] = []

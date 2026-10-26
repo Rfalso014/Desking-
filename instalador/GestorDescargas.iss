@@ -44,28 +44,28 @@ Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
-Name: "autoinicio"; Description: "Iniciar con Windows en segundo plano (la extensión funciona sin abrir la aplicación)"; GroupDescription: "Sistema:"; Flags: unchecked
+Name: "autoinicio"; Description: "Encender el gestor con Windows (en segundo plano: la página y la extensión funcionan siempre)"; GroupDescription: "Sistema:"; Flags: unchecked
 
 [Files]
 Source: "..\dist\GestorDescargas\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#Nombre}"; Filename: "{app}\{#Exe}"
+Name: "{group}\{#Nombre} (encender o apagar)"; Filename: "{app}\{#Exe}"
+Name: "{group}\Abrir la página del gestor"; Filename: "{app}\{#Exe}"; Parameters: "--abrir"
 Name: "{group}\Carpeta de la extensión del navegador"; Filename: "{app}\extension"
 Name: "{group}\Guía de instalación"; Filename: "{app}\LEEME_INSTALACION.txt"
 Name: "{group}\Desinstalar {#Nombre}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#Nombre}"; Filename: "{app}\{#Exe}"; Tasks: escritorio
 
 [Registry]
-; Mismo valor que escribe la casilla «Iniciar con Windows» de la aplicación (src/gestor/nativo/autoinicio.py).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "GestorDescargas"; ValueData: """{app}\{#Exe}"" --segundo-plano"; Flags: uninsdeletevalue; Tasks: autoinicio
+; Mismo valor que escribe la casilla «Encender con Windows» del gestor (src/gestor/nativo/autoinicio.py).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "GestorDescargas"; ValueData: """{app}\{#Exe}"" --servidor"; Flags: uninsdeletevalue; Tasks: autoinicio
 
 [Run]
-; Registra la conexión con Chrome y Edge (Native Messaging) apuntando a esta instalación.
-Filename: "{app}\{#Exe}"; Parameters: "--instalar-host"; StatusMsg: "Registrando la conexión con el navegador..."; Flags: runhidden waituntilterminated
-Filename: "{app}\{#Exe}"; Description: "Abrir {#Nombre}"; Flags: postinstall nowait skipifsilent
-; Actualización desde la app («Actualizar aplicación y extensión», instalación silenciosa): se vuelve a abrir sola.
-Filename: "{app}\{#Exe}"; Parameters: "--segundo-plano --reiniciado"; Flags: nowait; Check: WizardSilent
+; Al terminar: enciende el servidor y abre la página del gestor en el navegador.
+Filename: "{app}\{#Exe}"; Parameters: "--abrir"; Description: "Encender {#Nombre} y abrir su página"; Flags: postinstall nowait skipifsilent
+; Actualización desde el gestor («Actualizar», instalación silenciosa): se vuelve a encender solo.
+Filename: "{app}\{#Exe}"; Parameters: "--encender"; Flags: nowait; Check: WizardSilent
 Filename: "{app}\LEEME_INSTALACION.txt"; Description: "Ver cómo conectar la extensión del navegador"; Flags: postinstall shellexec skipifsilent unchecked
 
 [UninstallRun]
@@ -75,9 +75,9 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#Exe}"; Flags: runhidden; R
 Type: filesandordirs; Name: "{app}\_internal"
 
 [Code]
-// Al desinstalar se deshace lo que la aplicación escribió fuera de {app} (equivale a «--limpiar-sistema»,
+// Al desinstalar se deshace lo que el gestor escribió fuera de {app} (equivale a «--limpiar-sistema»,
 // pero sin ejecutar el .exe: así el desinstalador no espera al antivirus). Los datos del usuario se conservan.
-// Debe coincidir con src/gestor/nativo/instalador.py y autoinicio.py.
+// Debe coincidir con src/gestor/nativo/comun.py (restos de la versión de escritorio 1.x) y autoinicio.py.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Datos: String;
@@ -90,5 +90,6 @@ begin
     Datos := ExpandConstant('{%USERPROFILE}\.gestor-descargas');
     DelTree(Datos + '\nativo', True, True, True);
     DeleteFile(Datos + '\host.json');
+    DeleteFile(Datos + '\servidor.json');
   end;
 end;

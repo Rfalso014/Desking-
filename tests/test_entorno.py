@@ -30,8 +30,10 @@ def test_yt_dlp_se_importa_y_tiene_version():
     print("yt-dlp", __version__)
 
 
-def test_pyside6_se_importa():
-    # Solo importamos el módulo base (QtCore); no abrimos ventanas.
-    from PySide6 import QtCore
+def test_piezas_de_la_version_web_se_importan():
+    # tkinter: panel de control; curl_cffi: presentarse como Chrome en sitios con protección anti-bots.
+    import tkinter
 
-    assert QtCore.qVersion()
+    from gestor.descargador import puede_imitar_navegador
+    assert tkinter.TkVersion >= 8.6
+    assert puede_imitar_navegador()

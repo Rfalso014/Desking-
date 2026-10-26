@@ -1,26 +1,23 @@
-## Novedades de la 1.1.0
+## Novedades de la 2.0.0
 
-- **La extensión es una barra lateral** con tema día y noche; la aplicación tiene el mismo diseño.
-- **Recortar: descarga solo unos minutos.** En YouTube pulsa ✂ sobre el video y arrastra las asas de inicio y fin; o usa la página «Recortar» (hasta 10 trozos). Corte rápido o exacto.
-- **Modo edición:** MP4 H.264 + AAC que abre Premiere, DaVinci, CapCut, Final Cut y Vegas.
-- **«＋ Añadir» también sobre las miniaturas**, y el enlace correcto en inicios y feeds (corrige el error «recommended»).
-- **Videos repetidos:** pregunta antes de añadir otra vez algo que ya está en tu lista.
-- **Tamaño aproximado** de cada calidad antes de descargar.
-- **Se actualiza sola** (aplicación, extensión y yt-dlp), con un botón para hacerlo cuando quieras.
-- **Procesado más rápido:** convierte con la tarjeta gráfica y evita AV1 cuando hay que convertir.
+- **Ahora es una web** que funciona en tu propio equipo (http://127.0.0.1:7878). `GestorDescargas.exe` es un panel pequeño para **encender, apagar y reiniciar** el gestor, con la opción «Encender con Windows».
+- **Descargar ya o en grupo:** «Al grupo» junta enlaces en un grupo con nombre y los descarga todos con **Descargar grupo**, en una carpeta con su nombre.
+- **En su propia carpeta o no:** elige si cada video va en su carpeta o suelto en Videos / Música.
+- **Más sitios funcionan:** la extensión manda tu sesión del sitio solo para esa descarga (Vimeo, SharePoint, cursos…), los enlaces directos del reproductor cuando la página no se puede analizar, y se reintenta presentándose como Chrome en sitios con anti-bots.
+- **Recortar 4 veces más rápido** (30 s de YouTube en ~6 s en vez de ~25 s).
+- **Diseño reorganizado** en la página y la extensión, y un **modo oscuro más suave** para la vista.
 
-**Importante si vienes de la 1.0.0:** después de instalar, recarga la extensión en `chrome://extensions` (o vuelve a cargar la carpeta `extension` de la instalación). Desde ahí se recarga sola en cada actualización.
+**Importante si vienes de la 1.x:** después de instalar, en `chrome://extensions` pulsa **Actualizar** (↻) en la tarjeta de la extensión y acepta el permiso para leer los sitios. Luego vincúlala otra vez con el código de la página (Ajustes → Extensión del navegador).
 
 ## Instalar (Windows 10/11)
 
 1. Descarga **`GestorDescargas-…-instalador.exe`** (abajo, en *Assets*).
 2. Ábrelo con doble clic. No pide administrador ni Python: trae todo lo necesario (FFmpeg incluido).
    - Si aparece **«Windows protegió su PC»**: pulsa **Más información → Ejecutar de todas formas** (el programa no está firmado digitalmente).
-3. Al terminar se abre la aplicación. Queda en el menú Inicio como **Gestor de Descargas**.
+3. Al terminar se enciende el gestor y se abre su página. En el menú Inicio quedan **Gestor de Descargas (encender o apagar)** y **Abrir la página del gestor**.
 
 Para conectar la extensión de Chrome/Edge, sigue la guía del menú Inicio → *Gestor de Descargas* → «Guía de instalación».
 
 ¿Prefieres no instalar? Descarga **`GestorDescargas-…-portable.zip`**, descomprímelo y abre `GestorDescargas.exe`.
 
-Para actualizar desde la 1.0.0, ejecuta este instalador encima: tus descargas, historial y ajustes se conservan.
-**Desde la 1.1.0 la aplicación se actualiza sola** (busca cada 6 horas e instala cuando no hay descargas en curso).
+Para actualizar desde la 1.x, ejecuta este instalador encima: tus descargas, historial y ajustes se conservan.

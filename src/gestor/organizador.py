@@ -41,12 +41,13 @@ def confinar(ruta: Path, raiz: Path) -> Path:
 
 def carpeta_destino(prefs: Preferencias, rol: RolArchivo | str, titulo: str, *,
                     carpeta_manual: Path | None = None, subcarpeta: str | None = None,
-                    base: Path | None = None) -> Path:
+                    base: Path | None = None, carpeta_propia: bool = True) -> Path:
     """Carpeta final para un archivo según la organización elegida.
 
     `subcarpeta` es la carpeta con nombre propio (de una regla o elegida por el usuario, p. ej. "Cursos"):
     dentro quedan Videos, Musica, Subtitulos y Portadas. `base` es el lugar elegido para guardar; sin él
-    se usa la carpeta de descargas predeterminada.
+    se usa la carpeta de descargas predeterminada. Con `carpeta_propia=False` no se crea la carpeta con el
+    titulo del contenido: el archivo queda suelto en la de su tipo (o en la raiz, con organizacion «contenido»).
     """
     if prefs.organizacion not in ORGANIZACIONES:
         raise ErrorGestor(CodigoError.CONFIGURACION, f"Organización no válida: {prefs.organizacion!r}.")
@@ -63,7 +64,9 @@ def carpeta_destino(prefs: Preferencias, rol: RolArchivo | str, titulo: str, *,
     if prefs.organizacion == "tipo":
         destino = raiz / tipo
     elif prefs.organizacion == "contenido":
-        destino = raiz / contenido
+        destino = raiz / contenido if carpeta_propia else raiz
+    elif not carpeta_propia:
+        destino = raiz / tipo
     elif subcarpeta:   # la carpeta ya agrupa el contenido: dentro solo se separa por tipo
         destino = raiz / tipo
     else:  # tipo_y_contenido: el tipo lo decide el archivo PRINCIPAL; el resto va junto
@@ -94,7 +97,10 @@ def colocar_archivo(origen: Path, carpeta: Path, nombre: str, politica: str) -> 
     if politica not in POLITICAS:
         raise ErrorGestor(CodigoError.CONFIGURACION, f"Política de duplicados no válida: {politica!r}.")
     carpeta.mkdir(parents=True, exist_ok=True)
-    nombre = sanear_nombre(Path(nombre).stem, maximo=150) + Path(nombre).suffix
+    # Windows no admite rutas de más de 260 caracteres: en carpetas profundas se acorta el nombre (con margen
+    # para « (2)» si hay que renombrar).
+    maximo = max(20, min(150, 250 - len(str(carpeta)) - 1 - len(Path(nombre).suffix) - 5))
+    nombre = sanear_nombre(Path(nombre).stem, maximo=maximo) + Path(nombre).suffix
     destino = carpeta / nombre
 
     if destino.exists():
@@ -123,13 +129,14 @@ def colocar_archivo(origen: Path, carpeta: Path, nombre: str, politica: str) -> 
 
 def organizar(archivos: tuple[ArchivoDescargado, ...], prefs: Preferencias, titulo: str, *,
               carpeta_manual: Path | None = None, subcarpeta: str | None = None,
-              base: Path | None = None) -> list[Colocado]:
+              base: Path | None = None, carpeta_propia: bool = True) -> list[Colocado]:
     """Mueve todos los archivos de una tarea a su destino final."""
     principal = next((a for a in archivos if a.rol in (RolArchivo.VIDEO, RolArchivo.AUDIO)), archivos[0])
     resultados = []
     for a in archivos:
         # Con organización "contenido" o "tipo_y_contenido" todo va junto (carpeta del principal).
         rol_carpeta = principal.rol if prefs.organizacion in ("contenido", "tipo_y_contenido") else a.rol
-        destino = carpeta_destino(prefs, rol_carpeta, titulo, carpeta_manual=carpeta_manual, subcarpeta=subcarpeta, base=base)
+        destino = carpeta_destino(prefs, rol_carpeta, titulo, carpeta_manual=carpeta_manual, subcarpeta=subcarpeta,
+                                  base=base, carpeta_propia=carpeta_propia)
         resultados.append(colocar_archivo(a.ruta, destino, a.ruta.name, prefs.duplicados))
     return resultados

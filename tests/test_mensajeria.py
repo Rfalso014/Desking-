@@ -1,27 +1,19 @@
-﻿"""Protocolo, servidor IPC y host nativo (este último como proceso real)."""
-import io
+﻿"""Protocolo, API (página web y extensión) y el servidor HTTP local real."""
 import json
-import os
-import struct
-import subprocess
-import sys
-import time
-import uuid
-from multiprocessing.connection import Client
-from pathlib import Path
+import threading
+import urllib.error
+import urllib.request
 
 import pytest
 
+from gestor.api import CAMPOS_PREFERENCIAS, PREFERENCIAS_EDITABLES, Manejador
 from gestor.cola import GestorCola
 from gestor.config import Preferencias
 from gestor.db import BaseDatos
-from gestor.ipc import Manejador, ServidorIPC
-from gestor.vinculacion import Vinculacion
-from gestor.modelos import CodigoError, ErrorGestor, EstadoTarea, InfoContenido
-from gestor.nativo import host
+from gestor.modelos import CodigoError, ErrorGestor, InfoContenido
 from gestor.protocolo import validar_mensaje
-
-RAIZ = Path(__file__).resolve().parents[1]
+from gestor.vinculacion import Vinculacion
+from gestor.web.servidor import ServidorWeb
 
 
 def M(accion, datos=None, id_="m1", token=None, **extra):
@@ -43,10 +35,15 @@ def test_mensaje_valido_se_sanea():
     M("encolar", {}), M("encolar", {"url": 5}), {**M("ping"), "sorpresa": 1},
     M("encolar", {"url": "https://a.com", "opciones": {"formato_audio": "exe"}}),
     M("encolar", {"url": "https://a.com", "opciones": {"excluir": True}}),      # solo reglas, no la extensión
-    M("encolar", {"url": "https://a.com", "opciones": {"destino": "C:/Windows"}}),  # nada de rutas desde la extensión
+    M("encolar", {"url": "https://a.com", "opciones": {"destino": "C:/Windows"}}),  # nada de rutas desde fuera
     M("estado", {"id": "../../x"}), M("cancelar", {"id": "ZZZZZZZZZZZZ"}),
     M("listar", {"estados": ["hackeado"]}), M("listar", {"limite": 100000}), M("listar", {"limite": True}),
     M("listar", {"texto": "x" * 500}),
+    M("anadir", {"url": "https://a.com", "modo": "ya"}),                          # modo fuera de la lista
+    M("anadir", {"url": "https://a.com", "cookies": "a=b"}),                     # la sesión es una lista
+    M("anadir", {"url": "https://a.com", "opciones": {"medios": ["file:///c:/x"]}}),
+    M("grupo_crear", {"nombre": "x" * 61}), M("grupo_crear", {"nombre": "a\nb"}),
+    M("preferencias", {"cambios": "todo"}), M("vinculos", {"revocar": True}),
 ])
 def test_mensajes_invalidos(bruto):
     with pytest.raises(ErrorGestor):
@@ -65,7 +62,11 @@ def test_origen_raro_se_descarta_no_rompe():
     assert validar_mensaje(M("detectar", {"url": "https://a.com/v", "origen": "about:blank"}))["datos"]["origen"] is None
 
 
-# --- manejador (sin red) ----------------------------------------------------
+def test_las_preferencias_editables_existen():
+    assert set(PREFERENCIAS_EDITABLES) <= CAMPOS_PREFERENCIAS
+
+
+# --- API (sin red) ------------------------------------------------------------
 @pytest.fixture
 def cola(tmp_path):
     db = BaseDatos(":memory:")
@@ -79,12 +80,19 @@ def cola(tmp_path):
 @pytest.fixture
 def vinc(cola):
     v = Vinculacion(cola.db)
-    return v, v.emparejar(v.codigo_actual()[0], "Pruebas")      # (vinculación, token válido)
+    return v, v.emparejar(v.codigo_actual()[0], "Pruebas")      # (vinculación, token de una extensión)
 
 
-def test_manejador_ciclo_basico(cola, vinc):
-    v, tk = vinc
-    mz = Manejador(cola, v, abrir_carpeta=lambda r: None)
+@pytest.fixture
+def mz(cola, vinc):
+    return Manejador(cola, vinc[0], abrir_carpeta=lambda r: None, token_web="token-de-la-pagina-web-0123456789")
+
+
+WEB = "token-de-la-pagina-web-0123456789"
+
+
+def test_ciclo_basico_desde_la_extension(mz, vinc):
+    tk = vinc[1]
     assert mz.manejar(M("ping"))["datos"]["vinculado"] is False
     assert mz.manejar(M("ping", token=tk))["datos"]["vinculado"] is True
     t = mz.manejar(M("detectar", {"url": "https://a.com/v", "origen": "https://a.com/"}, token=tk))["datos"]
@@ -97,13 +105,78 @@ def test_manejador_ciclo_basico(cola, vinc):
     assert not r["ok"] and r["error"]["mensaje"] == "La tarea no existe."
 
 
-def test_manejador_analizar(cola, vinc):
-    r = Manejador(cola, vinc[0]).manejar(M("analizar", {"url": "https://a.com/v"}, token=vinc[1]))
-    assert r["ok"] and r["datos"]["titulo"] == "Título" and r["datos"]["diagnostico"]["nivel"] == "desconocido"
+def test_la_pagina_web_entra_con_su_token_y_nadie_sin_token(mz):
+    d = mz.manejar(M("ping", token=WEB))["datos"]
+    assert d["vinculado"] is True and d["web"] is True
+    assert mz.manejar(M("listar", token=WEB))["ok"]
+    r = mz.manejar(M("listar", token="otro-token-que-no-vale-de-nada"))
+    assert not r["ok"] and r["error"]["codigo"] == "no_vinculado"
 
 
-def test_manejador_errores_y_basura(cola, vinc):
-    mz = Manejador(cola, vinc[0])
+def test_lo_delicado_solo_desde_la_pagina(mz, vinc):
+    for accion in ("vinculos", "apagar", "reiniciar", "elegir_carpeta"):
+        r = mz.manejar(M(accion, token=vinc[1]))
+        assert not r["ok"] and r["error"]["codigo"] == "no_vinculado", accion
+    v = mz.manejar(M("vinculos", token=WEB))["datos"]
+    assert len(v["codigo"]) == 9 and v["vinculos"][0]["nombre"] == "Pruebas"
+
+
+def test_la_extension_solo_cambia_lo_de_anadir(mz, vinc, tmp_path):
+    tk = vinc[1]
+    r = mz.manejar(M("preferencias", {"cambios": {"carpeta_propia": False, "modo_anadir": "grupo"}}, token=tk))
+    assert r["ok"] and r["datos"]["carpeta_propia"] is False and r["datos"]["modo_anadir"] == "grupo"
+    for cambio in ({"carpeta_raiz": str(tmp_path)}, {"velocidad": "maxima"}, {"inicio_windows": True}):
+        r = mz.manejar(M("preferencias", {"cambios": cambio}, token=tk))
+        assert not r["ok"], cambio
+    r = mz.manejar(M("preferencias", {"cambios": {"velocidad": "maxima"}}, token=WEB))
+    assert r["ok"] and r["datos"]["velocidad"] == "maxima"
+    assert not mz.manejar(M("preferencias", {"cambios": {"velocidad": "luz"}}, token=WEB))["ok"]
+
+
+def test_anadir_instantaneo_descarga_y_al_grupo_espera(mz, cola):
+    r = mz.manejar(M("anadir", {"url": "https://a.com/v1", "modo": "instantanea"}, token=WEB))["datos"]
+    assert r["estado"] == "pendiente" and r["modo"] == "instantanea" and r["grupo"] is None
+    r = mz.manejar(M("anadir", {"url": "https://a.com/v2", "modo": "grupo", "grupo": "Curso"}, token=WEB))["datos"]
+    assert r["estado"] == "detectado" and r["grupo"] == "Curso"
+    assert "Curso" in cola.prefs().grupos                       # el grupo se crea solo
+    # sin modo: se usa el que esté guardado (lo eligen la página o la extensión)
+    mz.manejar(M("preferencias", {"cambios": {"modo_anadir": "grupo", "grupo_activo": "Música"}}, token=WEB))
+    r = mz.manejar(M("anadir", {"url": "https://a.com/v3"}, token=WEB))["datos"]
+    assert r["estado"] == "detectado" and r["grupo"] == "Música"
+
+
+def test_anadir_repetido_pregunta_y_con_forzar_se_repite(mz):
+    mz.manejar(M("anadir", {"url": "https://a.com/v", "modo": "grupo"}, token=WEB))
+    r = mz.manejar(M("anadir", {"url": "https://a.com/v", "modo": "grupo"}, token=WEB))
+    assert not r["ok"] and r["error"]["codigo"] == "duplicado"
+    assert mz.manejar(M("anadir", {"url": "https://a.com/v", "modo": "grupo", "forzar": True}, token=WEB))["ok"]
+
+
+def test_grupos_crear_renombrar_descargar_y_eliminar(mz, cola):
+    for u in ("https://a.com/1", "https://a.com/2"):
+        mz.manejar(M("anadir", {"url": u, "modo": "grupo", "grupo": "Viaje"}, token=WEB))
+    g = {x["nombre"]: x for x in mz.manejar(M("grupos", token=WEB))["datos"]["grupos"]}
+    assert g["Viaje"]["esperando"] == 2
+    mz.manejar(M("grupo_renombrar", {"nombre": "Viaje", "nuevo": "Viaje 2026"}, token=WEB))
+    r = mz.manejar(M("grupo_iniciar", {"nombre": "Viaje 2026"}, token=WEB))["datos"]
+    assert r["iniciadas"] == 2
+    assert {t.estado.value for t in cola.listar()} == {"pendiente"}
+    assert all(t.opciones["grupo"] == "Viaje 2026" for t in cola.listar())
+    mz.manejar(M("anadir", {"url": "https://a.com/3", "modo": "grupo", "grupo": "Borrar"}, token=WEB))
+    r = mz.manejar(M("grupo_eliminar", {"nombre": "Borrar"}, token=WEB))["datos"]
+    assert r["quitadas"] == 1 and "Borrar" not in [x["nombre"] for x in r["grupos"]]
+
+
+def test_la_sesion_del_sitio_no_se_guarda_en_la_base_de_datos(mz, cola):
+    cookies = [{"name": "sid", "value": "secreto", "domain": ".a.com", "path": "/", "secure": True, "expirationDate": 2e9}]
+    t = mz.manejar(M("anadir", {"url": "https://a.com/v", "modo": "grupo", "cookies": cookies}, token=WEB))["datos"]
+    assert "secreto" not in json.dumps([x.a_dict() for x in cola.db.listar_tareas()])
+    assert cola._cookies[t["id"]][0]["value"] == "secreto"
+    mz.manejar(M("eliminar", {"id": t["id"]}, token=WEB))
+    assert t["id"] not in cola._cookies
+
+
+def test_errores_y_basura(mz, cola, vinc):
     tk = vinc[1]
     assert mz.manejar("basura")["ok"] is False
     r = mz.manejar(M("encolar", {"url": "http://localhost/x"}, token=tk))
@@ -114,114 +187,63 @@ def test_manejador_errores_y_basura(cola, vinc):
     assert "boom" not in json.dumps(r)
 
 
-# --- tubería real con clave -------------------------------------------------
+# --- servidor HTTP real --------------------------------------------------------
 @pytest.fixture
-def servidor(cola):
-    direccion = rf"\\.\pipe\GestorTest-{uuid.uuid4().hex}"
-    clave = os.urandom(32)
-    v = Vinculacion(cola.db)
-    token = v.emparejar(v.codigo_actual()[0], "Host de prueba")
-    s = ServidorIPC(cola, vinculacion=v, direccion=direccion, clave=clave)
-    s.iniciar()
-    yield direccion, clave, token
-    s.detener()
+def servidor(mz):
+    srv = ServidorWeb(mz, 0, extension_id="abcdefghijklmnopabcdefghijklmnop")
+    hilo = threading.Thread(target=srv.servir, daemon=True)
+    hilo.start()
+    yield srv
+    srv.detener()
 
 
-def test_pipe_ida_y_vuelta(servidor):
-    direccion, clave, _ = servidor
-    with Client(direccion, family="AF_PIPE", authkey=clave) as c:
-        c.send_bytes(json.dumps(M("ping")).encode())
-        assert json.loads(c.recv_bytes())["ok"]
-        c.send_bytes(b"no es json")                       # basura: responde error, no se cae
-        assert json.loads(c.recv_bytes())["ok"] is False
-        c.send_bytes(json.dumps(M("ping", id_="m2")).encode())
-        assert json.loads(c.recv_bytes())["id"] == "m2"
+def _pedir(srv, ruta="/", *, datos=None, cabeceras=None):
+    req = urllib.request.Request(f"http://127.0.0.1:{srv.puerto}{ruta}", method="POST" if datos is not None else "GET",
+                                 data=json.dumps(datos).encode() if datos is not None else None,
+                                 headers={"Content-Type": "application/json", **(cabeceras or {})})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
 
 
-def test_pipe_rechaza_clave_incorrecta(servidor):
-    direccion = servidor[0]
-    from multiprocessing import AuthenticationError
-    with pytest.raises((AuthenticationError, OSError, EOFError)):
-        Client(direccion, family="AF_PIPE", authkey=b"x" * 32)
-    # y el servidor sigue atendiendo a quien sí tiene la clave
-    with Client(direccion, family="AF_PIPE", authkey=servidor[1]) as c:
-        c.send_bytes(json.dumps(M("ping")).encode())
-        assert json.loads(c.recv_bytes())["ok"]
+def test_la_pagina_lleva_su_token_y_cabeceras_de_seguridad(servidor):
+    estado, cab, cuerpo = _pedir(servidor, "/")
+    assert estado == 200 and WEB.encode() in cuerpo and b"{{TOKEN}}" not in cuerpo
+    assert "default-src 'self'" in cab["Content-Security-Policy"] and cab["X-Content-Type-Options"] == "nosniff"
+    assert _pedir(servidor, "/app.js")[0] == 200 and _pedir(servidor, "/app.css")[0] == 200
+    for ruta in ("/../api.py", "/..%2F..%2Fapi.py", "/no-existe.js", "/servidor.py"):
+        assert _pedir(servidor, ruta)[0] == 404, ruta
 
 
-# --- marcos del protocolo nativo ---------------------------------------------
-def test_leer_y_escribir_mensaje():
-    buf = io.BytesIO()
-    host.escribir_mensaje(buf, {"a": "ñ"})
-    buf.seek(0)
-    assert host.leer_mensaje(buf) == {"a": "ñ"}
-    assert host.leer_mensaje(buf) is None                  # fin del canal
+def test_api_por_http_con_token(servidor):
+    estado, _, cuerpo = _pedir(servidor, "/api", datos=M("listar", token=WEB))
+    assert estado == 200 and json.loads(cuerpo)["ok"] is True
+    assert json.loads(_pedir(servidor, "/api", datos=M("listar"))[2])["error"]["codigo"] == "no_vinculado"
+    assert json.loads(_pedir(servidor, "/api/salud")[2])["app"] == "gestor-descargas"
 
 
-def test_mensaje_enorme_o_roto():
-    with pytest.raises(ErrorGestor):
-        host.leer_mensaje(io.BytesIO(struct.pack("=I", 50_000_000)))
-    with pytest.raises(ErrorGestor):
-        host.leer_mensaje(io.BytesIO(struct.pack("=I", 3) + b"{{{"))
-    assert host.leer_mensaje(io.BytesIO(struct.pack("=I", 10) + b"corto")) is None
+def test_otras_webs_no_pueden_usar_el_gestor(servidor):
+    # Un sitio cualquiera abierto en el navegador (CSRF) o un dominio que apunta a 127.0.0.1 (DNS rebinding).
+    assert _pedir(servidor, "/api", datos=M("ping"), cabeceras={"Origin": "https://malo.com"})[0] == 403
+    assert _pedir(servidor, "/", cabeceras={"Host": f"malo.com:{servidor.puerto}"})[0] == 403
+    assert _pedir(servidor, "/api", datos=M("ping"), cabeceras={"Origin": "chrome-extension://otraextensionqueno"})[0] == 403
+    # La propia página y nuestra extensión sí.
+    assert _pedir(servidor, "/api", datos=M("ping"), cabeceras={"Origin": f"http://127.0.0.1:{servidor.puerto}"})[0] == 200
+    estado, cab, _ = _pedir(servidor, "/api", datos=M("ping"), cabeceras={"Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"})
+    assert estado == 200 and cab["Access-Control-Allow-Origin"] == "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
 
 
-def test_respuesta_demasiado_grande_se_sustituye():
-    buf = io.BytesIO()
-    host.escribir_mensaje(buf, {"id": "m1", "ok": True, "datos": {"x": "a" * 2_000_000}})
-    buf.seek(0)
-    r = host.leer_mensaje(buf)
-    assert r["ok"] is False and r["id"] == "m1"
-
-
-def test_procesar_valida_antes_de_conectar():
-    def no_conectar():
-        raise AssertionError("no debió conectar")
-    r = host.procesar(M("encolar", {"url": "file:///x"}), no_conectar)
-    assert r["ok"] is False and r["error"]["codigo"] == "url_invalida"
-
-
-# --- el host como proceso real ---------------------------------------------
-def _hablar(datos_dir, direccion, mensajes, espera="1"):
-    env = {**os.environ, "GESTOR_DATOS": str(datos_dir), "GESTOR_PIPE": direccion,
-           "PYTHONPATH": str(RAIZ / "src"), "GESTOR_ESPERA_APP": espera}
-    entrada = b"".join(struct.pack("=I", len(b)) + b for b in (json.dumps(m).encode() for m in mensajes))
-    p = subprocess.run([sys.executable, "-m", "gestor.nativo.host", "chrome-extension://abc/"],
-                       input=entrada, capture_output=True, env=env, timeout=60, cwd=str(RAIZ / "src"))
-    salida, respuestas = p.stdout, []
-    while salida:
-        (n,) = struct.unpack("=I", salida[:4])
-        respuestas.append(json.loads(salida[4:4 + n]))
-        salida = salida[4 + n:]
-    return p, respuestas
-
-
-def test_host_real_de_extremo_a_extremo(servidor, tmp_path):
-    direccion, clave, token = servidor
-    (tmp_path / "ipc.key").write_bytes(clave)
-    p, r = _hablar(tmp_path, direccion, [M("ping", id_="a"), M("detectar", {"url": "https://a.com/v"}, id_="b", token=token),
-                                        M("encolar", {"url": "file:///x"}, id_="c", token=token)])
-    assert p.returncode == 0, p.stderr
-    assert [x["id"] for x in r] == ["a", "b", "c"]
-    assert r[0]["ok"] and r[1]["datos"]["estado"] == "detectado"
-    assert r[2]["ok"] is False and r[2]["error"]["codigo"] == "url_invalida"
-
-
-def test_host_sin_app_da_mensaje_comprensible(tmp_path):
-    (tmp_path / "ipc.key").write_bytes(os.urandom(32))
-    inicio = time.time()
-    p, r = _hablar(tmp_path, rf"\\.\pipe\NoExiste-{uuid.uuid4().hex}", [M("ping")])
-    assert r[0]["ok"] is False and r[0]["error"]["codigo"] == "comunicacion"
-    assert "aplicación" in r[0]["error"]["mensaje"] and r[0]["error"]["solucion"]
-    assert time.time() - inicio < 30
-
-
-def test_host_sin_clave_tampoco_se_cae(tmp_path):
-    p, r = _hablar(tmp_path, r"\\.\pipe\NoExiste", [M("ping")])
-    assert r[0]["error"]["codigo"] == "comunicacion"
-
-
-def test_host_rechaza_origen_no_autorizado(tmp_path):
-    (tmp_path / "host.json").write_text(json.dumps({"origenes_permitidos": ["chrome-extension://otro/"]}))
-    p, r = _hablar(tmp_path, r"\\.\pipe\NoExiste", [M("ping")])
-    assert p.returncode == 2 and r == []
+def test_eventos_en_vivo_piden_token_y_avisan_de_los_cambios(servidor, mz):
+    assert _pedir(servidor, "/api/eventos?token=nada")[0] == 401
+    r = urllib.request.urlopen(f"http://127.0.0.1:{servidor.puerto}/api/eventos?token={WEB}", timeout=5)
+    assert r.readline().startswith(b"retry:")
+    r.readline()
+    mz.manejar(M("anadir", {"url": "https://a.com/vivo", "modo": "grupo"}, token=WEB))
+    linea = b""
+    while not linea.startswith(b"data:"):
+        linea = r.readline()
+    evento = json.loads(linea[5:])
+    assert evento["tipo"] == "tarea" and evento["tarea"]["url"] == "https://a.com/vivo"
+    r.close()

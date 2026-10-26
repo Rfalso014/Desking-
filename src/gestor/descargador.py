@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp
+from yt_dlp.networking.impersonate import ImpersonateTarget
 from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
 from yt_dlp.utils import DownloadCancelled, download_range_func
 
@@ -67,6 +68,8 @@ class OpcionesDescarga:
     trozo_http: int = 10 * 1024 * 1024        # 0 = sin trozos
     deno: Path | None = None                  # runtime JS para YouTube
     sesion: dict = field(default_factory=dict)   # cookies del navegador / cookies.txt (ver config.opciones_sesion)
+    referer: str | None = None                # pagina donde estaba el video (lo exigen muchos servidores de video)
+    imitar_navegador: bool = False            # presentarse como Chrome (sitios con proteccion anti-bots, Cloudflare)
 
     def validar(self) -> None:
         def malo(msg: str) -> ErrorGestor:
@@ -84,6 +87,9 @@ class OpcionesDescarga:
             raise malo("Opciones de sesión no válidas.")
         if not (isinstance(self.fragmentos, int) and 1 <= self.fragmentos <= 32):
             raise malo("Los fragmentos simultáneos deben estar entre 1 y 32.")
+        if self.referer is not None and not (isinstance(self.referer, str) and self.referer.startswith(("http://", "https://"))
+                                             and len(self.referer) <= 2048 and not any(c in self.referer for c in "\r\n")):
+            raise malo("La página de origen no es válida.")
         if not (isinstance(self.trozo_http, int) and 0 <= self.trozo_http <= 100 * 1024 * 1024):
             raise malo("El tamaño de trozo no es válido.")
         if self.altura_max is not None and not (isinstance(self.altura_max, int) and 100 <= self.altura_max <= 8640):
@@ -137,9 +143,16 @@ def construir_selector(o: OpcionesDescarga) -> str:
     return f"bv*{h}+ba/b{h}"
 
 
-# Bajar un trozo suelto va unas 20-25 veces más lento que el video entero (medido en YouTube: FFmpeg usa una sola
-# conexión y YouTube la limita). Si los trozos suman mucho, conviene bajar todo y cortar aquí.
-FACTOR_TROZOS = 20
+# Bajar un trozo con FFmpeg sigue siendo mas lento por segundo de video que bajar el archivo entero (FFmpeg lee de forma
+# secuencial). Desde que se piden partes de 10 MB (`-request_size`, ver ARGS_FFMPEG_ENTRADA) un trozo de 30 s de YouTube
+# baja en ~6 s en vez de ~25 s (medido 2026-10-26), asi que solo conviene bajarlo todo y cortar aqui si los trozos
+# ocupan mas de una quinta parte del video.
+FACTOR_TROZOS = 5
+
+# YouTube frena las peticiones HTTP largas (una sola conexion que pide el archivo entero). FFmpeg 8+ puede pedir el
+# archivo por partes, como hace el navegador, y asi no se le aplica el freno.
+ARGS_FFMPEG_ENTRADA = ["-request_size", str(10 * 1024 * 1024), "-multiple_requests", "1",
+                       "-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_delay_max", "10"]
 
 
 def estrategia_tramos(o: OpcionesDescarga) -> str | None:
@@ -153,6 +166,20 @@ def estrategia_tramos(o: OpcionesDescarga) -> str | None:
 def _hms(seg: float) -> str:
     s = int(seg)
     return f"{s // 3600:02d}-{s % 3600 // 60:02d}-{s % 60:02d}"
+
+
+MAX_RUTA = 240       # Windows no admite rutas de más de 260 caracteres (margen para archivos temporales de FFmpeg)
+
+
+def _plantilla_corta(plantilla: str, carpeta: Path, extra: int) -> str:
+    """Acorta el título de la plantilla si la carpeta es profunda, para que la ruta completa no pase de MAX_RUTA.
+
+    `extra` = caracteres que se añaden al nombre (p. ej. « (00-01-30 a 00-02-00)» de un trozo). Se mide la ruta
+    expandida: una carpeta escrita en forma corta (C:\\Users\\ADMINI~1) se alarga al usarla.
+    """
+    sobra = MAX_RUTA - len(str(carpeta.resolve())) - 1 - len(" [xxxxxxxxxxx].f000-0.webm.part") - extra
+    maximo = max(20, min(120, sobra))
+    return plantilla.replace("%(title).120B", f"%(title).{maximo}B")
 
 
 def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path, hook_progreso: Callable[[dict], None],
@@ -180,6 +207,7 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path, hook_progreso: 
     if o.deno:
         p["js_runtimes"] = {"deno": {"path": str(o.deno)}}
     p.update(o.sesion)
+    p.update(opciones_red(o.referer, o.imitar_navegador))
     pp: list[dict[str, Any]] = p["postprocessors"]
 
     if o.modo in ("subtitulos", "portada"):
@@ -200,13 +228,15 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path, hook_progreso: 
 
     if estrategia_tramos(o) == "rangos":
         p["download_ranges"] = download_range_func(None, [tuple(t) for t in o.tramos])
+        p["external_downloader_args"] = {"ffmpeg_i": list(ARGS_FFMPEG_ENTRADA)}
         if o.corte_exacto and o.modo == "video":
             codificador_rangos = codificador_rangos or codificador_h264(o.ffmpeg_dir)[1]
             # yt-dlp, con «force_keyframes_at_cuts», convierte con x264 «medium» (lo más lento). En su lugar se le pasa
             # a FFmpeg el codificador rápido de este equipo: al convertir, FFmpeg ya corta en el segundo exacto.
-            p["external_downloader_args"] = {"ffmpeg_o": [*codificador_rangos, "-c:a", "aac", "-b:a", "192k"]}
-        # Título más corto que el normal: el tramo alarga el nombre y Windows no admite rutas de más de 260 caracteres.
-        p["outtmpl"] = o.plantilla_nombre.replace("%(title).120B", "%(title).90B") + " (%(section_start>%H-%M-%S)s a %(section_end>%H-%M-%S)s).%(ext)s"
+            p["external_downloader_args"]["ffmpeg_o"] = [*codificador_rangos, "-c:a", "aac", "-b:a", "192k"]
+        p["outtmpl"] = _plantilla_corta(o.plantilla_nombre, carpeta, 30) + " (%(section_start>%H-%M-%S)s a %(section_end>%H-%M-%S)s).%(ext)s"
+    else:
+        p["outtmpl"] = _plantilla_corta(o.plantilla_nombre, carpeta, 0) + ".%(ext)s"
 
     if o.subtitulos:
         p.update(writesubtitles=True, writeautomaticsub=o.subtitulos_automaticos,
@@ -216,6 +246,35 @@ def construir_opciones_ytdlp(o: OpcionesDescarga, carpeta: Path, hook_progreso: 
         p["writethumbnail"] = True
         pp.append({"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"})
     return p
+
+
+def opciones_red(referer: str | None = None, imitar_navegador: bool = False) -> dict[str, Any]:
+    """Opciones de yt-dlp para sitios exigentes: la pagina de origen (Referer) y presentarse como Chrome.
+
+    Muchos servidores de video responden 403 si la peticion no dice desde que pagina se mira el video, y los sitios
+    con proteccion anti-bots (Cloudflare) rechazan a quien no parece un navegador real. Imitar al navegador necesita
+    `curl_cffi`; si no esta instalado no se pide (yt-dlp fallaria al arrancar).
+    """
+    p: dict[str, Any] = {}
+    if referer:
+        p["http_headers"] = {"Referer": referer}
+    if imitar_navegador and puede_imitar_navegador():
+        p["impersonate"] = ImpersonateTarget()
+        p["extractor_args"] = {"generic": {"impersonate": [""]}}
+    return p
+
+
+_imitar: list[bool] = []
+
+
+def puede_imitar_navegador() -> bool:
+    if not _imitar:
+        try:
+            import curl_cffi  # noqa: F401
+            _imitar.append(True)
+        except ImportError:
+            _imitar.append(False)
+    return _imitar[0]
 
 
 def _necesita_ffmpeg(o: OpcionesDescarga) -> bool:

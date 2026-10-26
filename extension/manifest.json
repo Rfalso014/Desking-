@@ -1,17 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Gestor de Descargas",
-  "version": "1.1.0",
-  "description": "Botón de descarga sobre los videos y menú contextual: envía el contenido a la aplicación Gestor de Descargas.",
+  "version": "2.0.0",
+  "description": "Botón de descarga sobre los videos y menú contextual: envía el contenido al Gestor de Descargas web de este equipo.",
   "minimum_chrome_version": "116",
   "permissions": [
     "contextMenus",
-    "nativeMessaging",
     "storage",
     "activeTab",
     "scripting",
     "sidePanel",
-    "notifications"
+    "notifications",
+    "cookies",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js",

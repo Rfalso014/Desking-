@@ -3,7 +3,7 @@ import pytest
 from gestor.cola import GestorCola
 from gestor.config import Preferencias
 from gestor.db import BaseDatos
-from gestor.ipc import Manejador
+from gestor.api import Manejador
 from gestor.modelos import CodigoError, ErrorGestor, EstadoTarea, InfoContenido
 from gestor.protocolo import validar_mensaje
 from gestor.vinculacion import ALFABETO, Vinculacion

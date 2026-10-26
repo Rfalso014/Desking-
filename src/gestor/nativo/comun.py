@@ -1,51 +1,39 @@
-"""Piezas compartidas por la app y el host nativo (sin dependencias pesadas)."""
-import getpass
-import json
+"""Piezas del sistema compartidas (sin dependencias pesadas): carpeta de datos y limpieza de la versión anterior."""
 import os
-import re
-import secrets
 from pathlib import Path
 
-NOMBRE_HOST = "com.gestor.descargas"
+# Hasta la versión 1.x la extensión hablaba con una aplicación de escritorio por Native Messaging.
+NOMBRE_HOST_ANTIGUO = "com.gestor.descargas"
+BASES_REGISTRO_ANTIGUAS = (r"Software\Google\Chrome\NativeMessagingHosts", r"Software\Microsoft\Edge\NativeMessagingHosts")
 
 
 def carpeta_datos() -> Path:
     # OJO: no usar %LOCALAPPDATA%. El Python de la Microsoft Store redirige lo que se escribe allí a una
-    # carpeta oculta, y Chrome (que no es Python de la Store) no vería los archivos del host.
+    # carpeta oculta, y otros programas no verían los archivos.
     base = Path(os.environ.get("GESTOR_DATOS") or (Path.home() / ".gestor-descargas"))
     base.mkdir(parents=True, exist_ok=True)
     return base
 
 
-def direccion_pipe() -> str:
-    """Nombre de la tubería (pipe) de Windows; una por usuario."""
-    if os.environ.get("GESTOR_PIPE"):
-        return os.environ["GESTOR_PIPE"]
-    usuario = re.sub(r"[^A-Za-z0-9_-]", "_", getpass.getuser())
-    return rf"\\.\pipe\GestorDescargas-{usuario}"
-
-
-def clave_ipc(crear: bool = False) -> bytes:
-    """Secreto compartido app<->host. Solo la app lo crea; el host lo lee.
-
-    Se guarda en la carpeta de datos del usuario (LocalAppData), que otros
-    usuarios de Windows no pueden leer. Quien no tenga la clave no puede hablar
-    con la aplicación aunque conozca el nombre de la tubería.
-    """
-    ruta = carpeta_datos() / "ipc.key"
-    if not ruta.exists():
-        if not crear:
-            raise FileNotFoundError("La aplicación aún no ha creado la clave de comunicación.")
-        ruta.write_bytes(secrets.token_bytes(32))
-    return ruta.read_bytes()
-
-
-def config_host() -> dict:
-    """Configuración escrita por el instalador: orígenes permitidos y comando para abrir la app."""
-    ruta = carpeta_datos() / "host.json"
-    if not ruta.exists():
-        return {}
-    try:
-        return json.loads(ruta.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+def quitar_puente_antiguo(*, datos: Path | None = None, bases: tuple[str, ...] = BASES_REGISTRO_ANTIGUAS) -> bool:
+    """Quita lo que registró la versión de escritorio (host de Native Messaging). Devuelve True si había algo."""
+    import winreg
+    habia = False
+    for base in bases:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, rf"{base}\{NOMBRE_HOST_ANTIGUO}")
+            habia = True
+        except OSError:
+            pass
+    raiz = datos or carpeta_datos()
+    for ruta in sorted((raiz / "nativo").glob("*")) if (raiz / "nativo").is_dir() else []:
+        ruta.unlink(missing_ok=True)
+        habia = True
+    for ruta in (raiz / "nativo", raiz / "host.json", raiz / "host.log", raiz / "ipc.key"):
+        if ruta.is_dir():
+            ruta.rmdir()
+            habia = True
+        elif ruta.exists():
+            ruta.unlink()
+            habia = True
+    return habia

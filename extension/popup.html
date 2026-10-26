@@ -10,202 +10,171 @@
   <!-- Íconos (trazos al estilo Tabler) -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-descarga" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></symbol>
-    <symbol id="i-cola" viewBox="0 0 24 24"><path d="M3.5 5.5l1.5 1.5l2.5 -2.5"/><path d="M3.5 11.5l1.5 1.5l2.5 -2.5"/><path d="M3.5 17.5l1.5 1.5l2.5 -2.5"/><path d="M11 6l9 0"/><path d="M11 12l9 0"/><path d="M11 18l9 0"/></symbol>
     <symbol id="i-pagina" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M3.6 9h16.8"/><path d="M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18"/><path d="M12.5 3a17 17 0 0 1 0 18"/></symbol>
-    <symbol id="i-edicion" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 4l0 16"/><path d="M16 4l0 16"/><path d="M4 8l4 0"/><path d="M4 16l4 0"/><path d="M4 12l16 0"/><path d="M16 8l4 0"/><path d="M16 16l4 0"/></symbol>
+    <symbol id="i-lista" viewBox="0 0 24 24"><path d="M9 6l11 0"/><path d="M9 12l11 0"/><path d="M9 18l11 0"/><path d="M5 6l0 .01"/><path d="M5 12l0 .01"/><path d="M5 18l0 .01"/></symbol>
     <symbol id="i-ajustes" viewBox="0 0 24 24"><path d="M12 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 6l8 0"/><path d="M16 6l4 0"/><path d="M6 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 12l2 0"/><path d="M10 12l10 0"/><path d="M15 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M4 18l11 0"/><path d="M19 18l1 0"/></symbol>
     <symbol id="i-auto" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M12 17a5 5 0 0 0 0 -10v10"/></symbol>
     <symbol id="i-dia" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/></symbol>
     <symbol id="i-noche" viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/></symbol>
-    <symbol id="i-recortar" viewBox="0 0 24 24"><path d="M4 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M4 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M9.15 14.85l8.85 -10.85"/><path d="M9.15 9.15l8.85 10.85"/></symbol>
-    <symbol id="i-buscar" viewBox="0 0 24 24"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></symbol>
+    <symbol id="i-externo" viewBox="0 0 24 24"><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"/><path d="M11 13l9 -9"/><path d="M15 4h5v5"/></symbol>
   </svg>
 
-  <nav class="riel" aria-label="Secciones">
-    <span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-descarga"/></svg></span>
-    <div class="secciones" role="tablist" aria-orientation="vertical">
-      <button role="tab" data-pestana="cola" aria-selected="true" title="Cola" aria-label="Cola"><svg class="ic"><use href="#i-cola"/></svg><span id="contador-cola" class="insignia" hidden></span></button>
-      <button role="tab" data-pestana="pagina" aria-selected="false" title="Esta página" aria-label="Esta página"><svg class="ic"><use href="#i-pagina"/></svg></button>
-      <button role="tab" data-pestana="recortar" aria-selected="false" title="Recortar: descargar solo unos minutos" aria-label="Recortar"><svg class="ic"><use href="#i-recortar"/></svg></button>
-      <button role="tab" data-pestana="edicion" aria-selected="false" title="Edición" aria-label="Edición"><svg class="ic"><use href="#i-edicion"/></svg></button>
-      <button role="tab" data-pestana="ajustes" aria-selected="false" title="Ajustes" aria-label="Ajustes"><svg class="ic"><use href="#i-ajustes"/></svg></button>
-    </div>
-    <button id="btn-tema" class="tema" title="Tema: automático" aria-label="Cambiar tema"><svg class="ic"><use href="#i-auto"/></svg></button>
-  </nav>
-
-  <div class="panel">
-    <header class="cabecera">
-      <div><h1 id="titulo-seccion">Gestor de Descargas</h1><p id="sub-seccion" class="meta">La descarga la hace tu aplicación</p></div>
+  <header class="cabecera">
+    <div class="marca">
+      <span class="marca-logo" aria-hidden="true"><svg class="ic"><use href="#i-descarga"/></svg></span>
+      <h1>Gestor de Descargas</h1>
+      <span class="espacio"></span>
       <span id="estado-conexion" class="punto" role="status"><i></i><span>Conectando…</span></span>
-    </header>
-
-    <div id="aviso" class="aviso" role="alert" hidden></div>
-    <div id="aviso-version" class="aviso" role="alert" hidden>
-      <span id="aviso-version-texto"></span>
-      <div class="acciones"><button id="btn-reiniciar-app" class="resalte">Reiniciar aplicación</button></div>
+      <button id="btn-web" class="icono-boton" title="Abrir la página del gestor" aria-label="Abrir la página del gestor"><svg class="ic"><use href="#i-externo"/></svg></button>
+      <button id="btn-tema" class="icono-boton" title="Tema: automático" aria-label="Cambiar tema"><svg class="ic"><use href="#i-auto"/></svg></button>
     </div>
 
-    <!-- 1) Sin conexión con la aplicación -->
-    <main id="vista-conexion" class="vista" hidden>
-      <div class="tarjeta centrada">
-        <div class="ilustracion" aria-hidden="true">⚠</div>
-        <h2 id="conexion-titulo">No se pudo conectar con la aplicación</h2>
-        <p id="conexion-texto" class="tenue"></p>
-        <div class="acciones centro"><button id="btn-reintentar-conexion" class="primario">Reintentar</button></div>
+    <!-- Cómo se añade lo que mandes (botón sobre los videos, clic derecho y este panel). Lo guarda el gestor. -->
+    <div id="barra-modo" class="modo" hidden>
+      <div class="modo-fila">
+        <div class="segmentos" id="seg-cuando" role="group" aria-label="Cuándo descargar">
+          <button type="button" data-valor="instantanea" aria-pressed="true" title="Empieza a descargarse al momento">Descargar ya</button>
+          <button type="button" data-valor="grupo" aria-pressed="false" title="Espera en el grupo hasta que pulses «Descargar grupo»">Al grupo</button>
+        </div>
+        <select id="sel-grupo" aria-label="Grupo" hidden></select>
       </div>
-    </main>
+      <label class="interruptor" title="Apagado: el archivo queda suelto en Videos (o Música), sin carpeta con su título">
+        <input type="checkbox" id="chk-carpeta"><span>Cada descarga en su propia carpeta</span></label>
+    </div>
 
-    <!-- 2) Falta vincular con el código -->
-    <main id="vista-vincular" class="vista" hidden>
+    <nav class="pestanas" role="tablist" id="pestanas" hidden>
+      <button role="tab" data-pestana="pagina" aria-selected="true"><svg class="ic"><use href="#i-pagina"/></svg>Esta página</button>
+      <button role="tab" data-pestana="cola" aria-selected="false"><svg class="ic"><use href="#i-lista"/></svg>Descargas <span id="contador-cola" class="insignia" hidden></span></button>
+      <button role="tab" data-pestana="ajustes" aria-selected="false"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</button>
+    </nav>
+  </header>
+
+  <div id="aviso" class="aviso" role="alert" hidden></div>
+
+  <!-- 1) Sin conexión con el gestor -->
+  <main id="vista-conexion" class="contenido" hidden>
+    <div class="tarjeta centrada">
+      <h2 id="conexion-titulo">El gestor de descargas está apagado</h2>
+      <p id="conexion-texto" class="tenue"></p>
+      <div class="acciones derecha"><button id="btn-reintentar-conexion" class="primario">Reintentar</button></div>
+    </div>
+    <p class="ayuda">El gestor funciona en este equipo como una página web (http://127.0.0.1). Enciéndelo con <b>GestorDescargas.exe</b>;
+      puedes marcar «Encender con Windows» para no tener que hacerlo cada vez.</p>
+  </main>
+
+  <!-- 2) Falta vincular con el código -->
+  <main id="vista-vincular" class="contenido" hidden>
+    <div class="tarjeta">
+      <h2>Vincula la extensión</h2>
+      <p class="tenue">Por seguridad, el gestor solo obedece a extensiones vinculadas. Abre la página del gestor, entra en
+        <b>Ajustes → Extensión del navegador</b> y escribe aquí el código que muestra.</p>
+      <label for="codigo" class="etiqueta">Código de vinculación</label>
+      <input id="codigo" class="codigo" inputmode="text" autocomplete="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX">
+      <p class="ayuda">8 letras y números. Dura 10 minutos y sirve una sola vez.</p>
+      <div class="acciones derecha"><button id="btn-abrir-codigo" class="enlace">Ver el código</button><button id="btn-vincular" class="primario" disabled>Vincular</button></div>
+    </div>
+  </main>
+
+  <!-- 3) Vinculada -->
+  <main id="vista-principal" class="contenido" hidden>
+
+    <!-- Esta página -->
+    <section id="pestana-pagina" role="tabpanel">
       <div class="tarjeta">
-        <h2>Vincula la extensión</h2>
-        <p class="tenue">Por seguridad, la aplicación solo obedece a extensiones vinculadas. Abre la aplicación, entra en la pestaña
-          <b>Extensión</b> y escribe aquí el código que muestra.</p>
-        <label for="codigo" class="etiqueta">Código de vinculación</label>
-        <input id="codigo" class="codigo" inputmode="text" autocomplete="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX" aria-describedby="codigo-ayuda">
-        <p id="codigo-ayuda" class="ayuda">8 letras y números. Dura 10 minutos y sirve una sola vez.</p>
-        <div class="acciones"><button id="btn-vincular" class="primario" disabled>Vincular</button></div>
+        <div id="pagina-titulo" class="titulo">—</div>
+        <div id="pagina-sitio" class="meta"></div>
+        <span class="etiqueta">Qué descargar</span>
+        <div id="selector-pagina"></div>
+        <div class="acciones"><button id="btn-descargar-pagina" class="primario ancho">Descargar esta página</button></div>
+        <p id="nota-medios" class="ayuda" hidden></p>
       </div>
-    </main>
 
-    <!-- 3) Vinculada: aplicación principal -->
-    <main id="vista-principal" class="vista" hidden>
-
-      <!-- Cola (se abre aquí) -->
-      <section id="pestana-cola" role="tabpanel">
-        <div id="resumen" class="resumen"></div>
-        <div class="buscador"><svg class="ic"><use href="#i-buscar"/></svg><input id="busqueda" type="search" placeholder="Buscar en la cola" aria-label="Buscar en la cola"></div>
-        <div class="filtros" role="group" aria-label="Filtrar">
-          <button data-filtro="todas" class="filtro activo">Todas</button><button data-filtro="activas" class="filtro">Activas</button>
-          <button data-filtro="completadas" class="filtro">Listas</button><button data-filtro="errores" class="filtro">Errores</button>
-        </div>
-        <ul id="cola" class="lista"></ul>
-        <div class="acciones">
-          <button id="btn-iniciar-todos" class="primario" hidden>Descargar todos los detectados</button>
-          <button id="btn-cancelar-todas" class="peligro" title="Detiene todo lo que está descargando, en espera o detectado">Cancelar todas</button>
-          <span class="espacio"></span>
-          <button id="btn-limpiar" class="enlace" title="No borra los archivos descargados">Quitar terminadas</button>
-        </div>
-        <div id="promo-edicion" class="promo" hidden>
-          <b>Modo edición</b>
-          <p>MP4 H.264 + AAC que abre en Premiere, DaVinci, CapCut y cualquier editor.</p>
-          <button id="btn-activar-edicion" class="resalte">Activar</button>
-        </div>
-      </section>
-
-      <!-- Esta página -->
-      <section id="pestana-pagina" role="tabpanel" hidden>
-        <div class="tarjeta compacta">
-          <div class="pagina-info"><div id="pagina-titulo" class="titulo">—</div><div id="pagina-sitio" class="meta"></div></div>
-          <div class="etiqueta">¿Qué quieres descargar?</div>
-          <div id="selector-pagina" class="selector"></div>
-          <div class="acciones">
-            <button id="btn-analizar" class="sec">Analizar</button>
-            <button id="btn-descargar-pagina" class="primario">Descargar esta página</button>
-          </div>
-        </div>
-        <div id="analisis" hidden></div>
-
-        <div class="fila-titulo">
-          <h2>Recursos encontrados <span id="contador-recursos" class="insignia" hidden></span></h2>
-          <span><button id="btn-imagenes" class="enlace" hidden></button> <button id="btn-buscar" class="enlace">Volver a buscar</button></span>
-        </div>
-        <p id="recursos-nota" class="nota"></p>
-        <ul id="recursos" class="lista"></ul>
-        <div id="barra-recursos" class="acciones barra-fija" hidden>
-          <button id="btn-marcar" class="enlace">Marcar todos</button>
-          <button id="btn-olvidar" class="enlace" title="Quita de la lista lo encontrado antes de recargar la página">Quitar anteriores</button>
-          <span class="espacio"></span>
-          <button id="btn-enviar" class="sec" title="La app lee sus datos y los deja en «Detectados» para que decidas">Enviar a la app</button>
-          <button id="btn-descargar-sel" class="primario">Descargar</button>
-        </div>
-      </section>
-
-      <!-- Recortar: descargar solo unos minutos -->
-      <section id="pestana-recortar" role="tabpanel" hidden>
-        <div class="tarjeta compacta">
-          <div id="rc-titulo" class="titulo">—</div>
+      <details class="plegable" id="plegable-recortar">
+        <summary>✂ Recortar: solo unos minutos</summary>
+        <div class="dentro">
           <div id="rc-meta" class="meta"></div>
-        </div>
-        <div class="tarjeta">
-          <h2>Trozos que quieres</h2>
-          <div id="rc-linea" class="linea-video" title="El video completo: en color, los trozos marcados; la raya blanca es por dónde va"></div>
+          <div id="rc-linea" class="linea-video" title="El video completo: en color, los trozos marcados; la raya es por dónde va"></div>
           <ul id="rc-tramos" class="tramos"></ul>
-          <button id="rc-anadir" class="enlace">+ Añadir otro trozo</button>
-          <label class="interruptor"><input type="checkbox" id="rc-exacto"><span>Corte exacto: empieza en el segundo justo (convierte el trozo; tarda un poco más)</span></label>
+          <button id="rc-anadir" class="enlace">+ Otro trozo</button>
+          <label class="interruptor"><input type="checkbox" id="rc-exacto"><span>Corte exacto<small>Empieza en el segundo justo (convierte el trozo; tarda un poco más).</small></span></label>
           <label class="interruptor"><input type="checkbox" id="rc-audio"><span>Solo el audio</span></label>
           <p id="rc-resumen" class="ayuda"></p>
           <p id="rc-error" class="error-caja" hidden></p>
-          <div class="acciones"><button id="rc-descargar" class="primario">Descargar trozos</button></div>
+          <div class="acciones derecha"><button id="rc-descargar" class="primario">Descargar trozos</button></div>
+          <p class="ayuda">En YouTube también puedes pulsar <b>✂</b> sobre el video y arrastrar el inicio y el fin.</p>
         </div>
-        <p class="ayuda">En YouTube también puedes pulsar <b>✂</b> sobre el video y marcar el inicio y el fin mientras lo ves.
-          Si los trozos son una parte grande del video, la aplicación lo baja entero y lo corta (es más rápido).</p>
-      </section>
+      </details>
 
-      <!-- Edición -->
-      <section id="pestana-edicion" role="tabpanel" hidden>
-        <div class="promo grande">
-          <b>Videos listos para editar</b>
-          <p>Se guardan en MP4 con video H.264 y audio AAC: los abren Premiere Pro, DaVinci Resolve, CapCut, Final Cut, Vegas y cualquier editor.
-            Si el sitio ya los ofrece así no se convierte nada; si no, la aplicación los convierte al terminar.</p>
-          <label class="interruptor"><input type="checkbox" id="ed-defecto"><span>Usarlo siempre al añadir videos («＋ Añadir» y clic derecho)</span></label>
+      <details class="plegable" id="plegable-medios">
+        <summary>Enlaces directos de video <span id="contador-medios" class="insignia" hidden></span></summary>
+        <div class="dentro">
+          <p class="ayuda">Lo que cargó el reproductor de esta página. Si «Descargar esta página» falla, el gestor los prueba solo;
+            también puedes descargar uno directamente. Pon el video a reproducir unos segundos para que aparezca.</p>
+          <ul id="medios" class="lista"></ul>
         </div>
-        <div class="tarjeta">
-          <h2>Calidad para editar</h2>
-          <div id="ed-calidad" class="opciones-calidad" role="radiogroup" aria-label="Calidad para editar">
-            <label><input type="radio" name="ed-calidad" value="1080"><span><b>1080p</b> Recomendada: casi nunca hay que convertir, es lo más rápido.</span></label>
-            <label><input type="radio" name="ed-calidad" value="720"><span><b>720p</b> Archivos ligeros para proyectos rápidos.</span></label>
-            <label><input type="radio" name="ed-calidad" value="mejor"><span><b>La mejor (4K / 1440p)</b> Máxima calidad; suele necesitar conversión y tarda más.</span></label>
-          </div>
-          <p class="ayuda">Es la misma «calidad máxima» de los Ajustes.</p>
-        </div>
-        <div class="tarjeta">
-          <h2>Descargar ahora</h2>
-          <p id="ed-pagina" class="meta">—</p>
-          <div class="acciones"><button id="btn-editar-pagina" class="primario">Descargar esta pestaña para editar</button></div>
-        </div>
-      </section>
+      </details>
 
-      <!-- Ajustes -->
-      <section id="pestana-ajustes" role="tabpanel" hidden>
-        <div class="tarjeta">
-          <h2>Actualizaciones</h2>
-          <ul id="act-versiones" class="versiones"></ul>
-          <ul id="act-pendientes" class="pendientes"></ul>
-          <label class="interruptor"><input type="checkbox" id="act-auto"><span>Actualizar automáticamente (busca cada 6 horas e instala cuando no hay descargas)</span></label>
-          <p id="act-estado" class="ayuda" role="status"></p>
-          <div class="acciones">
-            <button id="btn-buscar-act" class="enlace">Buscar</button>
-            <button id="btn-actualizar" class="primario">Actualizar aplicación y extensión</button>
+      <details class="plegable" id="plegable-recursos">
+        <summary>Más en esta página <span id="contador-recursos" class="insignia" hidden></span></summary>
+        <div class="dentro">
+          <p id="recursos-nota" class="ayuda"></p>
+          <div class="acciones"><button id="btn-imagenes" class="enlace" hidden></button><span class="espacio"></span><button id="btn-buscar" class="enlace">Volver a buscar</button></div>
+          <ul id="recursos" class="lista"></ul>
+          <div id="barra-recursos" class="acciones barra-fija" hidden>
+            <button id="btn-marcar" class="enlace">Marcar todos</button>
+            <button id="btn-olvidar" class="enlace" title="Quita lo encontrado antes de recargar la página">Quitar anteriores</button>
+            <span class="espacio"></span>
+            <button id="btn-descargar-sel" class="primario">Descargar</button>
           </div>
-          <p class="ayuda">Actualiza la aplicación, esta extensión y lo que usan para descargar (yt-dlp, Deno…). La aplicación se reinicia y la extensión se recarga sola.</p>
         </div>
-        <div class="tarjeta">
-          <h2>Apariencia</h2>
-          <label class="campo-linea">Tema
-            <select id="aj-tema"><option value="auto">Automático (como Windows)</option><option value="dia">Día</option><option value="noche">Noche</option></select></label>
-          <label class="campo-linea">Al abrir, mostrar
-            <select id="aj-inicio"><option value="cola">La cola</option><option value="pagina">Esta página</option></select></label>
-        </div>
-        <div class="tarjeta">
-          <h2>Botón sobre los videos</h2>
-          <label class="interruptor"><input type="checkbox" id="aj-boton"><span>Mostrar «＋ Añadir» al pasar el cursor sobre un video</span></label>
-          <p class="ayuda">Solo agrega el video a la cola (estado «Detectado»). No se descarga nada hasta que pulses «Descargar».</p>
-        </div>
-        <div class="tarjeta">
-          <h2>Qué descargar por defecto</h2>
-          <p class="ayuda">Se usa con «＋ Añadir» y con el clic derecho. Siempre podrás cambiarlo antes de descargar.</p>
-          <div id="selector-ajustes" class="selector"></div>
-        </div>
-        <div class="tarjeta">
-          <h2>Aplicación</h2>
-          <p id="aj-vinculo" class="tenue"></p>
-          <div class="acciones"><button id="btn-abrir-app" class="sec">Abrir la aplicación</button><button id="btn-desvincular" class="peligro">Desvincular</button></div>
-        </div>
-        <p class="pie">La extensión solo lee las páginas en tu navegador y manda órdenes a la aplicación. No descarga archivos.</p>
-      </section>
-    </main>
-  </div>
+      </details>
+    </section>
+
+    <!-- Descargas -->
+    <section id="pestana-cola" role="tabpanel" hidden>
+      <div class="buscador"><input id="busqueda" type="search" placeholder="Buscar en descargas" aria-label="Buscar en descargas"></div>
+      <div id="cola"></div>
+      <div class="acciones">
+        <button id="btn-cancelar-todas" class="peligro">Cancelar todas</button>
+        <span class="espacio"></span>
+        <button id="btn-limpiar" class="enlace" title="No borra los archivos descargados">Limpiar terminadas</button>
+      </div>
+    </section>
+
+    <!-- Ajustes -->
+    <section id="pestana-ajustes" role="tabpanel" hidden>
+      <div class="tarjeta">
+        <h2>Qué descargar por defecto</h2>
+        <p class="ayuda">Se usa con el botón sobre los videos y con el clic derecho.</p>
+        <div id="selector-ajustes"></div>
+      </div>
+      <div class="tarjeta">
+        <h2>En las páginas</h2>
+        <label class="interruptor"><input type="checkbox" id="aj-boton"><span>Botón «＋» sobre los videos<small>Aparece al pasar el cursor sobre un video o su miniatura.</small></span></label>
+        <label class="interruptor"><input type="checkbox" id="aj-sesion"><span>Usar mi sesión en sitios que piden iniciar sesión
+          <small>Al añadir, se envía al gestor la sesión de ese sitio solo para esa descarga (no se guarda). Necesario en Vimeo, SharePoint, cursos…</small></span></label>
+      </div>
+      <div class="tarjeta">
+        <h2>Apariencia</h2>
+        <label class="campo-linea">Tema
+          <select id="aj-tema"><option value="auto">Automático (como Windows)</option><option value="dia">Claro</option><option value="noche">Oscuro</option></select></label>
+      </div>
+      <div class="tarjeta">
+        <h2>Conexión con el gestor</h2>
+        <p id="aj-vinculo" class="tenue"></p>
+        <label class="campo-linea">Puerto <input type="number" id="aj-puerto" min="1" max="65535"></label>
+        <div class="acciones"><button id="btn-abrir-web" class="sec">Abrir la página del gestor</button><span class="espacio"></span><button id="btn-desvincular" class="peligro">Desvincular</button></div>
+      </div>
+      <div class="tarjeta">
+        <h2>Actualizaciones</h2>
+        <ul id="act-versiones" class="versiones"></ul>
+        <label class="interruptor"><input type="checkbox" id="act-auto"><span>Actualizar automáticamente<small>Busca cada 6 horas e instala cuando no hay descargas.</small></span></label>
+        <p id="act-estado" class="ayuda" role="status"></p>
+        <div class="acciones derecha"><button id="btn-buscar-act" class="enlace">Buscar</button><button id="btn-actualizar" class="primario">Actualizar</button></div>
+      </div>
+      <p class="pie">La extensión solo lee las páginas en tu navegador y manda órdenes al gestor. No descarga archivos.</p>
+    </section>
+  </main>
 
   <script type="module" src="popup.js"></script>
 </body>

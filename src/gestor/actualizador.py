@@ -306,14 +306,10 @@ class Actualizador:
             self.al_reiniciar()
 
 
-def comando_reinicio(mostrar_ventana: bool) -> list[str]:
-    """Cómo volver a abrir esta misma aplicación (empaquetada o desde el código)."""
-    import sys
-    extra = ["--reiniciado"] + ([] if mostrar_ventana else ["--segundo-plano"])
-    if componentes.EMPAQUETADO:
-        return [sys.executable, *extra]
-    pyw = Path(sys.executable).with_name("pythonw.exe")
-    return [str(pyw if pyw.exists() else sys.executable), "-m", "gestor.app", *extra]
+def comando_reinicio() -> list[str]:
+    """Cómo volver a encender el servidor del gestor (empaquetado o desde el código)."""
+    from .control import comando_servidor
+    return comando_servidor()
 
 
 ARGS_INSTALADOR = ["/SP-", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]

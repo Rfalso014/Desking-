@@ -15,44 +15,25 @@ $version = (& $py scripts\preparar_recursos.py).Trim()
 if ($LASTEXITCODE -ne 0) { throw "No se pudieron preparar los recursos" }
 $recursos = Join-Path $raiz "build\recursos"
 
-# 1) Aplicación de escritorio (carpeta con .exe; sin consola)
+# 1) GestorDescargas.exe: el panel de control (tkinter) y, con --servidor, el servidor web (carpeta con .exe; sin consola).
+#    La página web (src\gestor\web\estatico) va dentro; curl_cffi permite presentarse como Chrome en sitios con anti-bots.
 & $py -m PyInstaller --noconfirm --clean --windowed --name GestorDescargas `
     --icon "$recursos\icono.ico" --version-file "$recursos\version.txt" `
-    --paths src --collect-all yt_dlp_ejs `
-    --exclude-module tkinter --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtQuick `
-    --exclude-module PySide6.QtQml --exclude-module PySide6.QtPdf `
+    --paths src --collect-all yt_dlp_ejs --collect-all curl_cffi `
+    --add-data "src\gestor\web\estatico;gestor\web\estatico" `
+    --exclude-module PySide6 `
     scripts\entrada_app.py
-if ($LASTEXITCODE -ne 0) { throw "Falló la compilación de la aplicación" }
-
-# 2) Host de Native Messaging (un solo .exe pequeño; con consola porque usa stdin/stdout)
-& $py -m PyInstaller --noconfirm --clean --onefile --console --name GestorHost `
-    --icon "$recursos\icono.ico" --version-file "$recursos\version.txt" `
-    --paths src --exclude-module PySide6 --exclude-module yt_dlp --exclude-module PIL --exclude-module httpx `
-    scripts\entrada_host.py
-if ($LASTEXITCODE -ne 0) { throw "Falló la compilación del host" }
-
+if ($LASTEXITCODE -ne 0) { throw "Falló la compilación del gestor" }
 $destino = Join-Path $raiz "dist\GestorDescargas"
-Copy-Item "dist\GestorHost.exe" $destino
-Remove-Item "dist\GestorHost.exe"
 
-# 3) Quitar piezas de Qt que una app de Widgets no usa (~45 MB): render OpenGL por software,
-#    teclado virtual (arrastra Qt Quick/QML), PDF y traducciones de Qt.
-$qt = Join-Path $destino "_internal\PySide6"
-foreach ($f in @("opengl32sw.dll", "Qt6Pdf.dll", "Qt6VirtualKeyboard.dll", "Qt6Quick.dll", "Qt6Qml.dll",
-                 "Qt6QmlMeta.dll", "Qt6QmlModels.dll", "Qt6QmlWorkerScript.dll", "translations",
-                 "plugins\platforminputcontexts", "plugins\imageformats\qpdf.dll")) {
-    $ruta = Join-Path $qt $f
-    if (Test-Path $ruta) { Remove-Item $ruta -Recurse -Force }
-}
-
-# 4) Archivos que acompañan al programa
+# 2) Archivos que acompañan al programa
 Copy-Item "extension" (Join-Path $destino "extension") -Recurse
 Remove-Item (Join-Path $destino "extension\test") -Recurse -Force
 if (Test-Path "tools\ffmpeg") { Copy-Item "tools\ffmpeg" (Join-Path $destino "tools\ffmpeg") -Recurse }
 if (Test-Path ".venv\Scripts\deno.exe") { New-Item -ItemType Directory -Force (Join-Path $destino "tools\deno") | Out-Null; Copy-Item ".venv\Scripts\deno.exe" (Join-Path $destino "tools\deno") }
 Copy-Item "docs\LEEME_INSTALACION.txt" $destino
 
-# 5) Comprobación rápida: el .exe (sin consola) arranca y termina bien con --version
+# 3) Comprobación rápida: el .exe (sin consola) arranca y termina bien con --version
 $prueba = Start-Process (Join-Path $destino "GestorDescargas.exe") -ArgumentList "--version" -Wait -PassThru
 if ($prueba.ExitCode -ne 0) { throw "GestorDescargas.exe --version terminó con código $($prueba.ExitCode)" }
 
@@ -62,7 +43,7 @@ for ($i = 1; $i -le 5; $i++) {
     catch { if ($i -eq 5) { throw }; Start-Sleep -Seconds 5 }
 }
 
-# 6) Instalador (Inno Setup 6). Se busca en las rutas habituales o en la variable ISCC.
+# 4) Instalador (Inno Setup 6). Se busca en las rutas habituales o en la variable ISCC.
 $iscc = @($env:ISCC, "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
           "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if ($iscc) {

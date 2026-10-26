@@ -1,4 +1,4 @@
-"""Iniciar con Windows (en segundo plano), para que la extensión funcione sin abrir la aplicación a mano.
+"""Encender con Windows el servidor del gestor (en segundo plano), para que la página y la extensión funcionen siempre.
 
 Escribe un valor en la clave «Run» del USUARIO actual (no pide permisos de administrador) y se puede quitar
 desde la misma casilla de Configuración.
@@ -13,9 +13,10 @@ NOMBRE = "GestorDescargas"
 
 def comando() -> str:
     if EMPAQUETADO:
-        return f'"{RAIZ_PROYECTO / "GestorDescargas.exe"}" --segundo-plano'
+        return f'"{RAIZ_PROYECTO / "GestorDescargas.exe"}" --servidor'
     pythonw = RAIZ_PROYECTO / ".venv" / "Scripts" / "pythonw.exe"
-    return f'"{pythonw if pythonw.exists() else sys.executable}" -m gestor.app --segundo-plano'
+    # Desde el código, `gestor` está en src: se arranca con el script de entrada, que lo añade al camino de búsqueda.
+    return f'"{pythonw if pythonw.exists() else sys.executable}" "{RAIZ_PROYECTO / "scripts" / "entrada_app.py"}" --servidor'
 
 
 def activo(*, clave: str = CLAVE) -> bool:

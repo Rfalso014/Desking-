@@ -1,70 +1,69 @@
-GESTOR DE DESCARGAS 1.1 - Instalación (Windows)
+GESTOR DE DESCARGAS 2.0 - Instalación (Windows)
 ===============================================
 
-La aplicación (GestorDescargas.exe) es la que descarga. La extensión del navegador solo detecta videos y le manda
-órdenes a la aplicación («Descargar», «Cancelar», «Eliminar»).
+Desde la versión 2.0 el gestor es una PÁGINA WEB que funciona en tu propio equipo: http://127.0.0.1:7878
+Quien descarga es el servidor del gestor (en segundo plano, sin ventanas). La extensión del navegador solo
+detecta videos y le manda órdenes. Nada sale de tu equipo: la página solo se puede abrir desde este PC.
 
 1. Instalar (elige una):
-   a) Instalador (recomendado): ejecuta GestorDescargas-<versión>-instalador.exe. No pide administrador,
-      se instala en %LOCALAPPDATA%\Programs\GestorDescargas, crea accesos directos y registra solo la
-      conexión con Chrome y Edge. Puedes marcar "Iniciar con Windows en segundo plano".
+   a) Instalador (recomendado): ejecuta GestorDescargas-<versión>-instalador.exe. No pide administrador y se
+      instala en %LOCALAPPDATA%\Programs\GestorDescargas. Marca "Encender el gestor con Windows" si quieres que
+      esté siempre disponible. Al terminar, enciende el gestor y abre su página.
    b) Versión portátil (.zip): descomprime la carpeta donde quieras (por ejemplo C:\Gestor) y no la muevas después.
 
-2. Abre GestorDescargas.exe y entra en la pestaña "Extensión".
-   Paso 1 (solo en la versión portátil; el instalador ya lo hace): pulsa "Instalar conexión"
-   (o, desde PowerShell:  .\GestorDescargas.exe --instalar-host ).
+2. Encender, apagar y reiniciar: abre GestorDescargas.exe. Es un panel pequeño con los botones
+   Encender / Apagar / Reiniciar / Abrir la página, y la casilla "Encender con Windows".
+   Cerrar el panel NO apaga el gestor: las descargas siguen.
+   También desde PowerShell o un acceso directo:
+     GestorDescargas.exe --encender    GestorDescargas.exe --apagar    GestorDescargas.exe --reiniciar
+     GestorDescargas.exe --abrir       (lo enciende si hace falta y abre la página)
 
-3. Paso 2: en Chrome o Edge abre chrome://extensions (o edge://extensions), activa "Modo de desarrollador",
+3. La extensión: en Chrome o Edge abre chrome://extensions (o edge://extensions), activa "Modo de desarrollador",
    pulsa "Cargar descomprimida" y elige la carpeta "extension" de esta instalación
    (con el instalador: menú Inicio > Gestor de Descargas > "Carpeta de la extensión del navegador").
-   El ID de la extensión es fijo y es el único autorizado por la conexión.
+   Si tenías la versión 1.x cargada, pulsa "Actualizar" (↻) en su tarjeta: Chrome pedirá permiso para leer los
+   sitios (necesario para usar tu sesión en sitios con inicio de sesión y para ver los enlaces directos de video).
 
-4. Paso 3 (vincular): la pestaña "Extensión" de la aplicación muestra un CÓDIGO de 8 caracteres (ej. K7M2-9QXA).
-   Pulsa el icono de la extensión en la barra del navegador: se abre una BARRA LATERAL a la derecha. Escribe ahí
-   el código. Dura 10 minutos y sirve una sola vez. (Consejo: fija el icono con la pieza de puzle > chincheta.)
-   Sin este paso la aplicación ignora a la extensión. Puedes revocar la vinculación desde la aplicación.
+4. Vincular (una sola vez): en la página del gestor, Ajustes > "Extensión del navegador" muestra un CÓDIGO de
+   8 caracteres (ej. K7M2-9QXA). Pulsa el icono de la extensión: se abre una barra lateral; escribe ahí el código.
+   Dura 10 minutos y sirve una sola vez. Puedes desvincularla desde la página.
 
-5. Prueba: pasa el cursor sobre un video (o sobre su miniatura) y pulsa "+ Añadir", o clic derecho sobre un
-   enlace > "Añadir a Gestor de Descargas". Eso SOLO lo agrega a tu lista (estado "Detectado"): no se descarga
-   nada hasta que tú pulses "Descargar" en la Cola de la extensión o en la aplicación.
-   Si la extensión dice que "la aplicación abierta es una versión anterior", pulsa "Reiniciar aplicación".
+5. Prueba: pasa el cursor sobre un video y pulsa "+ Descargar", o clic derecho > "Descargar con Gestor de Descargas".
 
-Qué descargar
-- En la aplicación (pestaña Descargas) y en la extensión puedes combinar casillas: Video, Audio, Subtítulos
-  (con sus idiomas, p. ej. es,en) y Portada, además de la calidad y el formato de audio (MP3, M4A, FLAC, OGG, OPUS, WAV).
-- Video + Audio marcados a la vez = dos descargas (los subtítulos y la portada van con la primera).
-- Solo subtítulos o solo portada también se puede: marca únicamente esa casilla.
-- Los enlaces que agregas con "+ Añadir" quedan "Detectados": al pulsar "Descargar" eliges qué quieres de ellos.
-- En la extensión, pestaña Ajustes > "Qué descargar por defecto" fija lo que usan el botón sobre los videos y el clic derecho.
-- Antes de descargar verás el tamaño aproximado de cada calidad (por ejemplo 2160p ≈ 679 MB · 1080p ≈ 118 MB).
-- Si un video ya está en tu lista, te pregunta si quieres descargarlo otra vez (botón: pulsa de nuevo;
-  clic derecho: una notificación con "Añadir otra vez"). Lo cancelado o fallido no cuenta.
+Descargar ya o en grupo
+- Arriba en la extensión (y al añadir en la página) eliges:
+    "Descargar ya": empieza a descargarse al momento.
+    "Al grupo": espera en el grupo elegido (p. ej. "Curso de guitarra") hasta que pulses "Descargar grupo".
+  Lo que elijas vale para la página, la extensión, el botón sobre los videos y el clic derecho.
+- Cada grupo se guarda en una carpeta con su nombre (se puede desactivar en Ajustes).
 
-Descargar solo unos minutos (Recortar)
-- En YouTube: pasa el cursor sobre el video y pulsa las tijeras (✂). Aparece una franja sobre el video con dos asas:
-  arrástralas para marcar el inicio y el fin (el video muestra ese momento), o usa "Marcar ahora" / escribe 1:20.
-  Pulsa "▶ Ver trozo" para comprobarlo y "Descargar trozo" para bajarlo.
-- Varios trozos del mismo video: barra lateral > página "Recortar" (icono de tijeras), hasta 10.
-- "Corte exacto": empieza en el segundo justo, pero convierte el trozo y tarda más. Sin él es casi instantáneo,
-  aunque puede empezar unos segundos antes.
-- Si el trozo es una parte grande del video, la aplicación baja el video entero y lo corta (es más rápido).
-- No funciona en directos que siguen emitiéndose ni con contenido protegido. En pantalla completa la franja no se ve.
+Carpetas
+- "Cada descarga en su propia carpeta" (arriba en la extensión, al añadir en la página y en Ajustes):
+    encendido: Videos\Título del video\archivo.mp4      apagado: Videos\archivo.mp4
+- La carpeta de descargas se cambia en Ajustes > "Dónde se guarda" (abre el selector de carpetas de Windows).
 
-Para edición (Premiere, DaVinci, CapCut, Final Cut, Vegas…)
-- Marca "Para edición" (o actívalo siempre en la página "Edición" de la extensión): el video se guarda en MP4 con
-  H.264 + AAC. En 1080p casi nunca hay que convertir; en 1440p/4K se convierte con la tarjeta gráfica si se puede.
+Sitios que no son YouTube
+- Si el sitio pide iniciar sesión (Vimeo, SharePoint, plataformas de cursos…), añádelo desde la extensión con la
+  sesión iniciada: la extensión manda tu sesión SOLO para esa descarga (no se guarda en ningún sitio).
+- Si la página no se puede analizar (el reproductor carga el video por su cuenta), pon el video a reproducir unos
+  segundos y añádelo desde la extensión: manda también los enlaces directos que vio (m3u8, mpd, mp4) y el gestor
+  los prueba solo. En "Esta página" > "Enlaces directos de video" puedes descargar uno a mano.
+- Los sitios con protección anti-bots (Cloudflare) se reintentan solos presentándose como Chrome.
+- El contenido con DRM (Netflix, Disney+, Spotify…) no se puede descargar: el gestor solo lo detecta y lo explica.
+
+Recortar (solo unos minutos)
+- En la extensión: "Esta página" > "Recortar"; en YouTube también con las tijeras (✂) sobre el video.
+- En la página: botón "Recortar" al añadir un enlace (escribe 1:30 o 01:02:15).
+- Ahora el trozo se pide por partes (como hace el navegador) y YouTube no lo frena: un trozo de 30 s baja en unos
+  segundos. Solo si los trozos ocupan más de una quinta parte del video se baja entero y se corta en el equipo.
+- "Corte exacto": empieza en el segundo justo, pero convierte el trozo y tarda más.
 
 Notas
-- FFmpeg viene en tools\ffmpeg (necesario para unir y convertir audio/video).
-- Deno viene en tools\deno: yt-dlp lo usa para YouTube y otros sitios que lo requieren.
-- Velocidad: Configuración > Velocidad (Normal / Rápida / Máxima) y "Descargas a la vez". La calidad es lo que más
-  pesa: un 4K ocupa unas 5 veces más que 1080p.
-- Tema: botón de abajo de la barra de iconos (app y extensión): automático > día > noche.
-- Las galerías de imágenes (gallery-dl) solo funcionan en la versión de desarrollo con Python.
-- Desinstalar: con el instalador, desde Configuración de Windows > Aplicaciones (quita también la conexión
-  y el inicio con Windows). En la portátil: GestorDescargas.exe --limpiar-sistema y borra la carpeta.
-  Tus datos (historial, ajustes) quedan en %USERPROFILE%\.gestor-descargas; bórrala si no los quieres.
-- Actualizar: en la aplicación (Configuración > Actualizaciones) o en la extensión (Ajustes > Actualizaciones)
-  pulsa "Actualizar aplicación y extensión". Pone al día la aplicación, la extensión y yt-dlp (los sitios cambian
-  a menudo); la aplicación se reinicia y la extensión se recarga sola. Con el instalador se descarga e instala
-  la versión nueva sin perder tus datos. Todo lo descargado se verifica con su huella SHA-256.
+- FFmpeg viene en tools\ffmpeg y Deno en tools\deno (yt-dlp lo usa para YouTube).
+- Si el gestor no responde: GestorDescargas.exe > Reiniciar. Su registro está en %USERPROFILE%\.gestor-descargas\servidor.log
+- Puerto: 7878. Si lo usa otro programa, define la variable de entorno GESTOR_PUERTO y pon el mismo número en
+  la extensión (Ajustes > Conexión con el gestor).
+- Desinstalar: desde Configuración de Windows > Aplicaciones. Tus datos (historial, ajustes) quedan en
+  %USERPROFILE%\.gestor-descargas; bórrala si no los quieres.
+- Actualizar: en la página (Ajustes > Actualizaciones) o en la extensión. Pone al día el gestor, la extensión y
+  yt-dlp (los sitios cambian a menudo). Todo lo descargado se verifica con su huella SHA-256.

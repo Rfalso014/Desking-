@@ -209,9 +209,8 @@ def test_no_se_actualiza_con_descargas_en_curso(con_ytdlp):
 
 
 def test_comando_de_reinicio_en_desarrollo():
-    cmd = actualizador.comando_reinicio(mostrar_ventana=False)
-    assert cmd[1:3] == ["-m", "gestor.app"] and "--reiniciado" in cmd and "--segundo-plano" in cmd
-    assert "--segundo-plano" not in actualizador.comando_reinicio(mostrar_ventana=True)
+    cmd = actualizador.comando_reinicio()
+    assert cmd[1:4] == ["-m", "gestor.control", "--servidor"]
 
 
 # --- protocolo e IPC -------------------------------------------------------------------------------------
@@ -226,7 +225,7 @@ def test_protocolo_admite_las_acciones_de_actualizacion():
 def test_ipc_informa_versiones_y_estado(con_ytdlp, tmp_path):
     from gestor.cola import GestorCola
     from gestor.db import BaseDatos
-    from gestor.ipc import Manejador
+    from gestor.api import Manejador
     db = BaseDatos(":memory:")
     try:
         man = Manejador(GestorCola(db))
@@ -272,7 +271,7 @@ def test_al_reiniciar_desde_el_codigo_se_encuentra_el_paquete():
 def test_ipc_pregunta_antes_de_repetir_un_video():
     from gestor.cola import GestorCola
     from gestor.db import BaseDatos
-    from gestor.ipc import Manejador
+    from gestor.api import Manejador
     db = BaseDatos(":memory:")
     try:
         man = Manejador(GestorCola(db))
@@ -327,7 +326,7 @@ def test_no_busca_en_cada_revision(con_ytdlp):
 def test_la_extension_activa_y_desactiva_la_actualizacion_automatica():
     from gestor.cola import GestorCola
     from gestor.db import BaseDatos
-    from gestor.ipc import Manejador
+    from gestor.api import Manejador
     db = BaseDatos(":memory:")
     try:
         man = Manejador(GestorCola(db))
